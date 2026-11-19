@@ -10,8 +10,9 @@
 
 ## Скриншоты
 
-Интерфейс на скриншотах показан на примере бета-версий аддона.
+Интерфейс версии 0.2.49-beta в WoW Forever.
 
-![Прокачка Наложения чар](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.49-beta/leveling.png)
-![Аукционные цены и список покупок](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.49-beta/auction-prices.png)
-![Очередь распыления](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.49-beta/disenchant.png)
+![Прокачка Наложения чар](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.49-beta/leveling-0.2.49.png)
+![Каталог рецептов Анноры](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.49-beta/annora-0.2.49.png)
+![Аукционные цены и список покупок](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.49-beta/auction-prices-0.2.49.png)
+![Очередь распыления](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.49-beta/disenchant-0.2.49.png)
