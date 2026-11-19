@@ -279,6 +279,7 @@ local function setTab(key)
     elseif key == "annora" then U.RenderAnnora()
     elseif key == "goal" then U.RenderGoal()
     elseif key == "routeCheck" then U.RenderRouteCheck()
+    elseif key == "workshop" then U.RenderWorkshop()
     elseif key == "history" then U.RenderHistory()
     elseif key == "leveling" then
         U.guidePage = ns.Leveling.Stage(ns.Leveling.Skill())
@@ -591,6 +592,9 @@ local function createRecipes(panel)
             if mouse == "RightButton" then
                 ns.db.favorites[recipe.recipeID] = not ns.db.favorites[recipe.recipeID] or nil
                 U.RenderRecipes()
+            elseif mouse == "LeftButton" and ns.Workshop and IsControlKeyDown and IsControlKeyDown() then
+                U.workshopRecipe, U.workshopMode, U.workshopList.page = recipe, "ws_orders", 1
+                setTab("workshop")
             elseif mouse == "LeftButton" and IsAltKeyDown and IsAltKeyDown() then
                 openShareMenu(self, recipe.recipeID, recipe.name)
             elseif mouse == "LeftButton" and self.sourceURL and IsShiftKeyDown and IsShiftKeyDown() then
@@ -954,6 +958,10 @@ function U.RenderPrices()
     U.priceRecipeIcon:SetTexture(selection and selection.icon or 136244)
     U.priceRecipeCaption:SetText(selection and not selection.shoppingOnly and not ns.priceSelectionLive
         and L.auction_saved_recipe or L.auction_plan_recipe)
+    local order = U.activeWorkshopOrder
+    if order and not ns.combinedPlan and selection and selection.recipeID == order.id then
+        U.priceRecipeCaption:SetText(string.format(L.ws_order_row,order.count,money(order.price)))
+    elseif order then U.activeWorkshopOrder=nil end
     U.priceRecipe:SetText(selection and selection.name or L.auction_choose_recipe)
     U.pricePlanCount:EnableMouse(not ns.combinedPlan)
     enabled(U.pricePlanCount.decrease, not ns.combinedPlan)
@@ -1110,6 +1118,24 @@ function U.RenderPrices()
             acquisition = acquisition .. "\n" .. string.format(L.reagent_vendor_price, money(source[2]), source[3])
         end
         row.source.tooltip = acquisition .. "\n" .. details .. "\n" .. L.sourceWowhead
+        if item.lots then
+            row.source.tooltip = row.source.tooltip .. "\n" .. string.format(L.ws_lots, item.lots, money(item.total), item.extra)
+        end
+        row.source:SetScript("OnClick", function()
+            if ns.Workshop and IsShiftKeyDown and IsShiftKeyDown() then
+                U.workshopItem, U.workshopMode = material, "ws_prices"
+                setTab("workshop")
+            else U.ShowDiagnostics(row.source.url, L.sourceWowhead) end
+        end)
+        if ns.Workshop then
+            local limit = ns.Workshop.Settings().limits[material.itemID]
+            local unit = item.total and item.needed and item.needed > 0 and item.total / (item.needed+(item.extra or 0))
+            if limit and ((unit or minimum) or 0) > limit then
+                row.name:SetTextColor(1,0.46,0.46)
+                row.source.tooltip = row.source.tooltip .. "\n" .. string.format(L.ws_limit_warning, money(limit))
+            else row.name:SetTextColor(unpackValues(C.text)) end
+            row.source.tooltip = row.source.tooltip .. "\n" .. L.ws_prices_shortcut
+        end
         enabled(row.search, status and status.open and not name:match("^#%d+$"))
         row:Show()
     end
@@ -1261,7 +1287,7 @@ local function createList(panel, title, hint, tab, render, closeTab)
     list.next = button(panel, 322, 426, 82, 24, L.nextPage, function() list.page=list.page+1; render() end)
     list.pageText = text(panel, 88, 429, 228, 18, "", 11, C.muted, true)
     list.pageText:SetJustifyH("CENTER")
-    button(panel, 0, 465, 106, 29, L.previous, function() setTab(closeTab) end)
+    if closeTab then button(panel, 0, 465, 106, 29, L.previous, function() setTab(closeTab) end) end
     U[tab] = list
     return list
 end
@@ -1633,6 +1659,396 @@ function U.RenderHistory()
     end
 end
 
+local workshopModes = {"ws_route","ws_budget","ws_swaps","ws_bank","ws_buy","ws_prices",
+    "ws_queue","ws_loot","ws_ready","ws_profit","ws_groups","ws_orders","ws_series"}
+
+local function workshopMoney(value)
+    if value == nil then return "?" end
+    return (value < 0 and "-" or "") .. money(math.floor(math.abs(value)))
+end
+
+function U.RenderWorkshopSaved(list,mode,saved,add,controls,open)
+    local catalog = {}
+    for _, recipe in ipairs(ns.Catalog.List("","all",ns.db.favorites)) do catalog[recipe.recipeID] = recipe end
+    local selected = U.workshopRecipe
+    local function textValue(field)
+        return list.fields[field]:GetText():gsub("[%c]", " "):match("^%s*(.-)%s*$")
+    end
+    if mode == "ws_groups" then
+        local active = U.workshopGroup
+        if active and saved.groups[active] then
+            add(active,L.ws_back_groups,function() U.workshopGroup=nil; open("ws_groups") end)
+            for _, id in ipairs(saved.groups[active]) do
+                local recipe = catalog[id] or {recipeID=id,name="#" .. id}
+                add(recipe.name,L.ws_delete_hint,function()
+                    if ns.ChoosePriceRecipe(recipe) then ns.combinedPlan=nil; setTab("prices") end
+                end,nil,function()
+                    for i, stored in ipairs(saved.groups[active]) do
+                        if stored == id then table.remove(saved.groups[active],i); break end
+                    end
+                    if #saved.groups[active] == 0 then saved.groups[active]=nil; U.workshopGroup=nil end
+                    open("ws_groups")
+                end)
+            end
+        else
+            local groups = {}
+            for group in pairs(saved.groups) do groups[#groups+1] = group end
+            table.sort(groups)
+            for _, group in ipairs(groups) do
+                add(group,string.format(L.ws_group_count,#saved.groups[group]),
+                    function() U.workshopGroup=group; open("ws_groups") end)
+            end
+        end
+        controls({L.ws_group_name,L.ws_recipe_id},{active,selected and selected.recipeID},function()
+            local group, id = textValue(1),tonumber(textValue(2))
+            if group == "" or not id or not catalog[id] then return end
+            saved.groups[group] = saved.groups[group] or {}
+            for _, existing in ipairs(saved.groups[group]) do if existing == id then return end end
+            table.insert(saved.groups[group],id)
+            ns.db.favorites[id] = true
+            U.workshopGroup=group
+            open("ws_groups")
+        end)
+    else
+        add(L.ws_groups,L.ws_group_shortcut,function() open("ws_groups") end)
+        local edit = U.workshopOrder
+        controls({L.ws_recipe_id,L.ws_order_count,L.ws_order_price,L.ws_order_message},
+            {edit and edit.id or selected and selected.recipeID,edit and edit.count or 1,edit and edit.price,edit and edit.message},function()
+            local id = tonumber(textValue(1))
+            if not id or not catalog[id] then return end
+            local order = edit or {}
+            order.id, order.name = id,catalog[id].name
+            order.count = math.min(500,math.max(1,math.floor(tonumber(textValue(2)) or 1)))
+            order.price = math.min(1000000000,math.max(0,math.floor(tonumber(textValue(3)) or 0)))
+            order.message = textValue(4)
+            if not edit then table.insert(saved.orders,1,order) end
+            saved.orders[31]=nil
+            U.workshopOrder=nil
+            open("ws_orders")
+        end)
+        for _, order in ipairs(saved.orders) do
+            local detail = string.format(L.ws_order_row,order.count,workshopMoney(order.price))
+            add(order.name,detail,function()
+                if IsShiftKeyDown and IsShiftKeyDown() then U.workshopOrder=order; U.RenderWorkshop(); return end
+                local recipe = catalog[order.id]
+                if recipe and ns.ChoosePriceRecipe(recipe) then
+                    ns.db.pricePlanCount, ns.db.shareMessage = order.count, order.message
+                    if not ns.Catalog.GetRecipeShareLink(order.id,order.name) then ns.db.shareRecipe=nil end
+                    ns.combinedPlan=nil
+                    U.pricePlanCount:SetText(tostring(order.count))
+                    U.activeWorkshopOrder = order
+                    setTab("prices")
+                end
+            end,detail .. "\n" .. (order.message or "") .. "\n" .. L.ws_order_shortcut,function()
+                for i, existing in ipairs(saved.orders) do
+                    if existing == order then table.remove(saved.orders,i); break end
+                end
+                if U.workshopOrder==order then U.workshopOrder=nil end
+                open("ws_orders")
+            end)
+        end
+    end
+end
+
+function U.RenderWorkshop()
+    local W, list = ns.Workshop, U.workshopList
+    local saved, mode = W.Settings(), U.workshopMode
+    local entries = {}
+    local function add(name, detail, action, tip, remove)
+        entries[#entries+1] = {name=name,detail=detail or "",action=action,tip=tip,remove=remove}
+    end
+    local function open(key)
+        U.workshopMode, list.page = key, 1
+        U.RenderWorkshop()
+    end
+    local function controls(labels, values, action, title)
+        for i, field in ipairs(list.fields) do
+            local label = labels[i]
+            if label then
+                field.label:SetText(label)
+                field:SetText(tostring(values[i] or ""))
+                field:Show()
+            end
+        end
+        list.apply.action = action
+        list.apply:SetText(title or L.ws_apply)
+        list.apply:Show()
+    end
+    for _, field in ipairs(list.fields) do field:Hide() end
+    list.apply:Hide()
+    list.title:SetText(mode and L[mode] or L.ws_title)
+    local hint = mode and L[mode .. "_hint"] or L.ws_home_hint
+    local from, cap = ns.Leveling.Skill()
+    local to, cut = ns.db.levelingGoal or 300, tonumber(saved.cut) or 5
+    local now = GetServerTime and GetServerTime()
+    local age = math.max(1,tonumber(ns.db.priceStaleMinutes) or 30)*60
+    local function name(id)
+        return reagentName({itemID=id,name="#" .. id})
+    end
+    local function quote(rows)
+        if #rows > 0 then return ns.QuoteMaterials(rows,1,0) end
+    end
+    if mode == "ws_route" then
+        local rods = {[7421]=6218,[7795]=6339,[13628]=11130,[13702]=11145,[20051]=16207}
+        for index, step in ipairs(ns.Leveling.steps) do
+            if step[1] < to then
+                local replacement = ns.db.routeReplacements[step[1]]
+                local id = replacement and replacement.recipeID or step[3]
+                local recipe = replacement and replacement.name or (C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id)) or "#" .. id
+                local state = from and from >= step[2] and L.ws_complete
+                    or cap and cap < math.min(step[2],to) and L.route_check_trainer
+                    or ns.Leveling.ReplacementExhausted(step,replacement,from) and L.stage_exhausted
+                    or #step[5] > 0 and ns.Catalog.IsLearned(id) == false and L.unlearned
+                    or from and from >= step[1] and L.ws_current or L.ws_pending
+                local tools, ready = W.RecipeTools(id)
+                local detail = state
+                if tools and #tools > 0 then
+                    detail = detail .. " / " .. table.concat(tools,", ") .. (ready and "" or " (!)")
+                end
+                if rods[id] then detail = detail .. " / " .. string.format(L.ws_make_rod,name(rods[id])) end
+                add(string.format(L.stage_saved_range,step[1],step[2]) .. " / " .. recipe, detail, function()
+                    setTab("leveling")
+                    U.guidePage = index
+                    U.RenderGuide()
+                end)
+            end
+        end
+    elseif mode == "ws_budget" then
+        controls({L.ws_gold,L.ws_reserve},{saved.gold or 20,saved.reserve or 15}, function()
+            saved.gold = math.min(100000, math.max(0,tonumber(list.fields[1]:GetText()) or 0))
+            saved.reserve = math.min(100, math.max(0,math.floor(tonumber(list.fields[2]:GetText()) or 0)))
+            U.workshopBudgetReady = true
+            U.RenderWorkshop()
+        end,L.ws_calculate)
+        if from and U.workshopBudgetReady then
+            local function calculate(reserve)
+                return W.Affordable(from,math.min(cap or from,to),math.floor(saved.gold*10000), function(target)
+                    return W.RouteCost(target,nil,reserve)
+                end)
+            end
+            local target, cost, state = calculate(0)
+            add(L.ws_budget_base,string.format(L.ws_budget_result,target,money(cost),state == "unknown" and L.ws_unknown or ""))
+            target, cost, state = calculate(saved.reserve)
+            add(L.ws_budget_reserve,string.format(L.ws_budget_result,target,money(cost),state == "unknown" and L.ws_unknown or ""))
+            local main = ns.GoalMaterials("goal")
+            for _, row in ipairs(main) do
+                local extra = math.ceil(row.per*saved.reserve/100)
+                add(name(row.itemID),string.format(L.ws_reserve_row,row.per,extra))
+            end
+            local current = ns.Leveling.steps[ns.Leveling.Stage(from)]
+            local swap = ns.db.routeReplacements[current[1]]
+            local id = swap and swap.recipeID or current[3]
+            local difficulty = Enum and Enum.TradeskillRelativeDifficulty
+            if difficulty then
+                local recipes, reason = ns.Catalog.List("","learned",ns.db.favorites)
+                if reason == "catalog_cached" and from ~= ns.db.lastEnchantingSkill then recipes={} end
+                for _, recipe in ipairs(recipes) do
+                    if recipe.recipeID == id then
+                        local value = recipe.relativeDifficulty
+                        if value ~= nil and (value == difficulty.Optimal or value == difficulty.Trivial) then
+                            add(recipe.name,string.format(L.ws_chance,value == difficulty.Optimal and 100 or 0))
+                        end
+                        break
+                    end
+                end
+            end
+        end
+    elseif mode == "ws_swaps" then
+        controls({}, {}, function()
+            if not from then return end
+            local recipes, reason = ns.Catalog.List("","learned",ns.db.favorites)
+            if reason == "catalog_cached" and from ~= ns.db.lastEnchantingSkill then
+                list.hint:SetText(L.budget_cached)
+                return
+            end
+            U.workshopSwaps, U.workshopBefore, U.workshopAfter = W.Alternatives(from,to,recipes,ns.db.routeReplacements,
+                function(preview) return W.RouteCost(to,preview) end)
+            U.workshopSwapSkill = from
+            U.RenderWorkshop()
+        end,L.ws_calculate)
+        local changes = U.workshopSwaps
+        if changes and #changes > 0 and U.workshopSwapSkill == from then
+            add(string.format(L.ws_saving,workshopMoney(U.workshopBefore-U.workshopAfter)),L.ws_commit_swaps,function()
+                for _, choice in ipairs(changes) do ns.db.routeReplacements[choice.first] = choice.recipe end
+                if ns.combinedPlan and ns.combinedPlan.goal then ns.RebuildShoppingPlan(true,ns.combinedPlan.goal) end
+                U.RenderTracker()
+                U.workshopSwaps = nil
+                U.RenderWorkshop()
+            end)
+            for _, choice in ipairs(changes) do add(choice.recipe.name,string.format(L.stage_saved_range,choice.first,choice.last)) end
+        elseif changes then add(L.ws_no_swaps) end
+    elseif mode == "ws_bank" then
+        local bank = ns.db.personalBank
+        local step = from and ns.Leveling.steps[ns.Leveling.Stage(from)]
+        local target = step and math.min(step[2],cap or from,to)
+        if bank and bank.time then hint = string.format(L.goal_bank_stamp,date("%d.%m.%Y %H:%M",bank.time)) end
+        if step and target > from then
+            local plan = ns.Leveling.GoalPlan(from,target,cap,"goal",ns.db.routeReplacements)
+            for _, row in ipairs(W.BankNeeds(plan,ns.Adapter.ReagentCount,bank and bank.counts)) do
+                add(name(row.itemID),string.format(L.ws_take,row.take,row.have,row.per))
+            end
+        end
+    elseif mode == "ws_buy" then
+        local rows = ns.GoalMaterials("goal")
+        local priced = quote(rows)
+        local summary = auctionSummary()
+        for _, row in ipairs(rows) do
+            local offer = priced and priced.shopping and priced.shopping[row.itemID]
+            if offer and offer.needed and offer.needed > 0 then
+                local source = ns.Leveling.reagentSources[row.itemID]
+                local shop = source and source[2] and math.ceil(offer.needed/source[3])*source[2]
+                local auction = not priced.stale and offer.total or nil
+                local unit = not auction and summary and ns.PriceModel.SummaryUnitPrice(summary,row.itemID,now,age)
+                local auctionEstimate = unit and unit * offer.needed
+                local comparison = auction or auctionEstimate
+                local choice = shop and (not comparison or shop <= comparison) and L.ws_vendor
+                    or comparison and L.ws_auction or source and (source[1] == "source_disenchant"
+                    or source[1] == "source_dust_vendor") and L.ws_disenchant or L.ws_unknown
+                local label = string.format(L.ws_sources,offer.needed,choice,workshopMoney(shop),
+                    auctionEstimate and ("~" .. workshopMoney(auctionEstimate)) or workshopMoney(auction))
+                local lots = offer.lots and string.format(L.ws_lots,offer.lots,workshopMoney(offer.total),offer.extra)
+                add(name(row.itemID),label,function()
+                    U.workshopItem = row
+                    open("ws_prices")
+                end,label .. (lots and ("\n" .. lots) or "") .. (source and ("\n" .. L[source[1]]) or ""))
+            end
+        end
+    elseif mode == "ws_prices" then
+        local market = ns.Auction.MarketKey()
+        local item = U.workshopItem
+        if item then
+            controls({L.ws_limit},{saved.limits[item.itemID]},function()
+                local limit = tonumber(list.fields[1]:GetText())
+                saved.limits[item.itemID] = limit and limit > 0 and limit < 1000000000 and math.floor(limit) or nil
+                U.RenderWorkshop()
+            end)
+            hint = name(item.itemID) .. " / " .. L.ws_prices_hint
+            local records = (saved.prices[market] or {})[item.itemID] or {}
+            local highest = 1
+            for _, sample in ipairs(records) do highest=math.max(highest,sample.unit or 0) end
+            for _, sample in ipairs(records) do
+                local bar = sample.unit and string.rep("|TInterface\\Buttons\\WHITE8X8:5:5|t",math.max(1,math.floor(sample.unit/highest*16))) or ""
+                add(date("%d.%m.%Y %H:%M",sample.time) .. "  " .. workshopMoney(sample.unit),
+                    string.format(L.ws_volume,sample.volume) .. "   " .. bar)
+            end
+        elseif market then
+            local ids = {}
+            for id in pairs(saved.prices[market] or {}) do ids[#ids+1] = id end
+            table.sort(ids)
+            for _, id in ipairs(ids) do add(name(id),"",function() U.workshopItem={itemID=id}; open("ws_prices") end) end
+        end
+    elseif mode == "ws_queue" then
+        controls({L.ws_cut,L.ws_duration},{cut,saved.duration or 1},function()
+            saved.cut = math.min(100, math.max(0,tonumber(list.fields[1]:GetText()) or 5))
+            saved.duration = math.min(3,math.max(1,math.floor(tonumber(list.fields[2]:GetText()) or 1)))
+            U.RenderWorkshop()
+        end)
+        add(saved.deFilter and L.ws_filter_on or L.ws_filter_off,L.ws_filter_hint,function()
+            saved.deFilter = not saved.deFilter
+            U.RenderWorkshop()
+        end)
+        add(L.ws_protection,L.ws_protection_detail)
+        local count, lootTotal, vendorTotal, auctionTotal, lootN, vendorN, auctionN = 0,0,0,0,0,0,0
+        for _, item in ipairs(ns.items or {}) do
+            if ns.deMarked and ns.deMarked[item.guid] then
+                count = count + 1
+                local loot, vendor, auction = W.Value(item,now,age,cut)
+                if loot ~= nil then lootN,lootTotal=lootN+1,lootTotal+loot end
+                if vendor ~= nil then vendorN,vendorTotal=vendorN+1,vendorTotal+vendor end
+                if auction ~= nil then auctionN,auctionTotal=auctionN+1,auctionTotal+auction end
+                local deposit = W.Deposit(item,saved.duration or 1)
+                add(item.link or item.name,string.format(L.ws_queue_values,workshopMoney(loot),workshopMoney(vendor),
+                    workshopMoney(auction),workshopMoney(deposit)))
+            end
+        end
+        table.insert(entries,1,{name=string.format(L.ws_queue_total,count),detail=string.format(L.ws_queue_coverage,
+            workshopMoney(lootTotal),lootN,workshopMoney(vendorTotal),vendorN,workshopMoney(auctionTotal),auctionN)})
+    elseif mode == "ws_loot" then
+        local observed = {}
+        for _, item in ipairs(ns.db.deHistory or {}) do
+            local actual, predicted = {}, {}
+            for _, drop in ipairs(item.drops or {}) do actual[#actual+1] = drop.link .. " x" .. drop.count end
+            for _, drop in ipairs(item.prediction or {}) do
+                predicted[#predicted+1] = name(drop[1]) .. (drop[4] and (" ~" .. drop[4] .. "%") or "")
+            end
+            if #actual > 0 then
+                local id = item.itemID or item.link
+                if id then
+                    local record = observed[id] or {count=0,drops={}}
+                    observed[id] = record
+                    record.count=record.count+1
+                    for _, drop in ipairs(item.drops) do
+                        record.drops[drop.link]=(record.drops[drop.link] or 0)+drop.count
+                    end
+                end
+            end
+            add(item.link or L.unknownItem,#actual > 0 and table.concat(actual,", ") or L.de_untracked,
+                nil, L.ws_prediction .. ": " .. (#predicted > 0 and table.concat(predicted,", ") or "?")
+                    .. "\n" .. L.ws_actual .. ": " .. (#actual > 0 and table.concat(actual,", ") or "?"))
+        end
+        for id, record in pairs(observed) do
+            local detail = string.format(L.ws_samples,record.count)
+            local averages = {}
+            for link, count in pairs(record.drops) do
+                averages[#averages+1] = link .. string.format(" × %.2f",count/record.count)
+            end
+            table.sort(averages)
+            table.insert(entries,1,{name=type(id)=="number" and name(id) or id,detail=detail,
+                tip=detail .. "\n" .. L.ws_average .. "\n" .. table.concat(averages,"\n")})
+        end
+    elseif mode == "ws_ready" or mode == "ws_profit" then
+        for _, recipe in ipairs(ns.Catalog.List("","learned",ns.db.favorites)) do
+            if mode == "ws_ready" then
+                if W.CanCraft(recipe) then
+                    add(recipe.name,L.ws_ready,function() if ns.ChoosePriceRecipe(recipe) then ns.combinedPlan=nil; setTab("prices") end end)
+                end
+            else
+                local output, cost, sale = W.CraftProfit(recipe,now,age,cut)
+                if output then
+                    local detail = string.format(L.ws_craft_values,workshopMoney(cost),workshopMoney(sale),
+                        workshopMoney(cost and sale and sale-cost))
+                    add(recipe.name,detail,function()
+                        local mats = ns.Adapter.RecipeReagents(recipe.recipeID) or {}
+                        local ids = {output}
+                        for _, mat in ipairs(mats) do ids[#ids+1] = mat.itemID end
+                        local ok, reason = ns.Auction.Start(ids,function()
+                            if U.activeTab == "workshop" and U.workshopMode == "ws_profit" then U.RenderWorkshop() end
+                        end)
+                        if not ok then list.hint:SetText(translated(reason)) end
+                    end,detail .. "\n" .. L.ws_profit_scan)
+                end
+            end
+        end
+    elseif mode == "ws_series" then
+        for _, row in ipairs(saved.series) do
+            local mats = {}
+            for _, mat in ipairs(row.materials or {}) do mats[#mats+1] = name(mat.itemID) .. " x" .. mat.count end
+            local detail = string.format(L.ws_series_row,row.count,row.goal,row.skill or "?",row.reason and translated(row.reason) or L.ws_current)
+            add(row.name or "#" .. row.id,detail,nil,detail .. "\n" .. table.concat(mats,", "))
+        end
+    elseif mode == "ws_groups" or mode == "ws_orders" then
+        U.RenderWorkshopSaved(list,mode,saved,add,controls,open)
+    else
+        for _, key in ipairs(workshopModes) do
+            add(L[key], L[key .. "_hint"], function()
+                if key == "ws_prices" then U.workshopItem=nil end
+                open(key)
+            end)
+        end
+    end
+    list.hint:SetText(hint or "")
+    if #entries == 0 then add(L.ws_empty) end
+    listPage(list,entries)
+    for _, row in ipairs(list.rows) do
+        local entry = row.entry
+        if entry then
+            row.name:SetText(entry.name)
+            row.detail:SetText(entry.detail)
+            row.pick, row.tooltip = entry.action, entry.tip or (entry.name .. "\n" .. entry.detail)
+        end
+    end
+end
+
 function U.Create()
     if U.frame then return U.frame end
     ns.db = ns.db or {}
@@ -1672,7 +2088,14 @@ function U.Create()
     end)
     text(header, 18, 13, 190, 25, L.title, 20, C.teal, true)
     text(header, 213, 20, 184, 16, L.beta, 8.8, C.muted, true)
-    text(header, 19, 40, 376, 16, L.subtitle, 10, C.muted, true)
+    text(header, 19, 40, 259, 16, L.subtitle, 10, C.muted, true)
+    if ns.Workshop then
+        U.workshopButton = button(header, 288, 36, 111, 20, L.ws_title, function()
+            if U.activeTab ~= "workshop" then U.workshopBack=U.activeTab end
+            U.workshopMode, U.workshopList.page=nil,1
+            setTab("workshop")
+        end)
+    end
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, -2)
     close:SetSize(32, 32)
@@ -1735,13 +2158,45 @@ function U.Create()
     createInventory(U.panels.disenchant)
     createPrices(U.panels.prices)
     createGuide(U.panels.leveling)
-    for _, key in ipairs({"plan", "budget", "history", "annora", "goal", "replacements", "savings", "routeCheck"}) do
+    for _, key in ipairs({"plan", "budget", "history", "annora", "goal", "replacements", "savings", "routeCheck","workshop"}) do
         local panel = CreateFrame("Frame", nil, frame)
         panel:SetPoint("TOPLEFT", frame, "TOPLEFT", 18, -102)
         panel:SetSize(404, 500)
         U.panels[key] = panel
     end
     createGoal(U.panels.goal)
+    if ns.Workshop then
+        local panel = U.panels.workshop
+        local list = createList(panel, L.ws_title,"","workshopList",U.RenderWorkshop)
+        list.fields = {}
+        for i=1,4 do
+            local x, y = ((i-1)%2)*156, 450+math.floor((i-1)/2)*25
+            local field = CreateFrame("EditBox",nil,panel,"InputBoxTemplate")
+            field:SetPoint("TOPLEFT",panel,"TOPLEFT",x+71,-y)
+            field:SetSize(80,21)
+            field:SetFontObject("GameFontHighlightSmall")
+            field:SetAutoFocus(false)
+            field:SetMaxLetters(120)
+            field.label = text(field,-68,0,66,21,"",9,C.muted,true)
+            field:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
+            list.fields[i]=field
+        end
+        list.apply = button(panel,316,451,88,21,L.ws_apply,function(self) if self.action then self.action() end end)
+        button(panel,316,476,88,22,L.previous,function()
+            if U.workshopMode then
+                U.workshopMode, list.page=nil,1
+                U.RenderWorkshop()
+            else setTab(U.workshopBack or "enchant") end
+        end)
+        for _, row in ipairs(list.rows) do
+            row:RegisterForClicks("LeftButtonUp","RightButtonUp")
+            row:SetScript("OnClick",function(self,mouse)
+                if mouse == "RightButton" then
+                    if self.entry and self.entry.remove then self.entry.remove() end
+                elseif self.pick then self.pick() end
+            end)
+        end
+    end
     createList(U.panels.routeCheck, L.route_check, "", "routeCheckList", U.RenderRouteCheck, "goal")
     text(U.panels.savings, 0, 0, 404, 25, L.stage_why, 16, C.teal)
     U.savingsDetail = text(U.panels.savings, 0, 36, 404, 190, "", 13, C.text)
@@ -2108,6 +2563,16 @@ local function renderDisenchantLoot(target)
         or (reason and status.open and translated(reason))
         or (status.open and L.deLootNoPrice or L.deLootNoCachedPrice))) or "")
     local loot = not partial and value or nil
+    if ns.Workshop then
+        local cut = math.min(100, math.max(0,tonumber(ns.Workshop.Settings().cut) or 5))
+        local factor = (100-cut)/100
+        if loot then loot=math.floor(loot*factor) end
+        if itemPrice then
+            itemPrice=math.floor(itemPrice*factor)
+            local deposit = ns.Workshop.Deposit(target,ns.Workshop.Settings().duration or 1)
+            U.deAuctionValue:SetText(string.format(L.ws_net_listing,money(itemPrice),workshopMoney(deposit)))
+        end
+    end
     if (loot or itemPrice) and finite(vendor) and vendor >= 0 then
         local auctionValue, lootValue = itemPrice or -math.huge, loot or -math.huge
         local best = math.max(auctionValue, lootValue, vendor)
@@ -2123,6 +2588,21 @@ end
 function U.RenderInventory()
     if not U.inventoryRows then return end
     local items, stats = ns.items or {}, ns.inventoryStats or {}
+    local unpriced = {}
+    if ns.Workshop and ns.Workshop.Settings().deFilter then
+        local filtered = {}
+        local now = GetServerTime and GetServerTime()
+        local age = (tonumber(ns.db.priceStaleMinutes) or 30)*60
+        for _, item in ipairs(items) do
+            local loot, vendor, auction = ns.Workshop.Value(item, now, age, ns.Workshop.Settings().cut or 5)
+            local incomplete = not loot or not vendor or (item.auctionable and not auction)
+            if incomplete then unpriced[item.guid]=true end
+            if incomplete or (ns.deMarked and ns.deMarked[item.guid]) or loot > math.max(vendor or 0,auction or 0) then
+                filtered[#filtered+1] = item
+            end
+        end
+        items = filtered
+    end
     local nextItem, marked
     if ns.DisenchantQueue then nextItem, marked = ns.DisenchantQueue() end
     local inFlight = ns.engine and ns.engine:GetView(ns.current).inFlight
@@ -2139,7 +2619,8 @@ function U.RenderInventory()
             row.name:SetText(item.link or item.name or L.unknownItem)
             local margin = ns.db.deSortValue and ns.DisenchantMargin(item)
             row.location:SetText(string.format(L.bagSlot, item.bag, item.slot)
-                .. (margin and ("  /  " .. (margin < 0 and "-" or "+") .. money(math.abs(margin))) or ""))
+                .. (unpriced[item.guid] and ("  /  " .. L.ws_unpriced)
+                    or margin and ("  /  " .. (margin < 0 and "-" or "+") .. money(math.abs(margin))) or ""))
             row.link, row.tooltip = item.link, item.name
             row.mark:SetChecked(ns.deMarked and ns.deMarked[item.guid] == true)
             enabled(row.mark, not busy)

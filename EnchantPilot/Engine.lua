@@ -168,6 +168,7 @@ function Engine:Restore(snapshot, progress)
         or not integer(progress.goal, 1, 500) or progress.completed >= progress.goal then return false end
     if not self:Arm(snapshot, progress.goal, progress) then return false end
     self.session.completed = progress.completed
+    if integer(progress.workshopSerial, 1) then self.session.workshopSerial = progress.workshopSerial end
     if integer(progress.startSkill, 0) then self.session.startSkill = progress.startSkill end
     self:Pause('session_restored')
     return true

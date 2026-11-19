@@ -239,6 +239,9 @@ local function plainRow(info)
         recipeID = info.recipeID, name = info.name, icon = info.icon, learned = info.learned,
         canSkillUp = info.canSkillUp, isEnchantingRecipe = info.isEnchantingRecipe,
         relativeDifficulty = info.relativeDifficulty, sourceText = info.sourceText,
+        maxTrivialLevel = readable(info.maxTrivialLevel, "number") and info.maxTrivialLevel > 0
+            and info.maxTrivialLevel <= 1000 and math.floor(info.maxTrivialLevel) == info.maxTrivialLevel
+            and info.maxTrivialLevel or nil,
     }
 end
 

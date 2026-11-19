@@ -73,7 +73,7 @@ end
 local function cost(offers, needed, whole)
     if type(offers) ~= 'table' then return nil, 'auction_partial' end
     if #offers == 0 then return nil, 'auction_missing' end
-    local ordered, total = {}, 0
+    local ordered, total, lots = {}, 0, 0
     for _, offer in ipairs(offers) do
         if type(offer) ~= 'table' or not integer(offer.quantity, 1) or not integer(offer.price, 1) then
             return nil, 'auction_partial'
@@ -89,26 +89,27 @@ local function cost(offers, needed, whole)
     end)
     for _, offer in ipairs(ordered) do
         local quantity = whole and offer.quantity or math.min(offer.quantity, needed)
+        lots = lots + 1
         total = total + (whole and offer.price or offer.price * quantity)
         needed = needed - quantity
-        if needed <= 0 then return total, nil, -needed end
+        if needed <= 0 then return total, nil, -needed, whole and lots or nil end
     end
     return nil, 'auction_volume'
 end
 
 local function addCost(result, needed, record, itemID, missing)
     if needed == 0 then return 0, nil, 0 end
-    local value, issue, extra
+    local value, issue, extra, lots
     if record == nil then issue = 'auction_missing'
     elseif not record.complete then issue = 'auction_partial'
-    else value, issue, extra = cost(record.offers, needed, record.whole == true) end
+    else value, issue, extra, lots = cost(record.offers, needed, record.whole == true) end
     if issue then
         result.total, result.issue = nil, result.issue or issue
         missing[itemID] = issue
     elseif result.total then
         result.total, result.extra = result.total + value, result.extra + extra
     end
-    return value, issue, extra
+    return value, issue, extra, lots
 end
 
 function P.SummaryBuyEstimate(shopping, prices, fromScratch)
@@ -163,7 +164,7 @@ function P.Quote(materials, casts, reserveCasts, prices, context)
             result.buy.total, result.buy.issue = nil, row.issue
         else
             row.needed = math.max(0, required - (mat.have or 0) - (mat.bank or 0))
-            row.total, row.issue, row.extra = addCost(result.buy, row.needed, record, mat.itemID, result.missing)
+            row.total, row.issue, row.extra, row.lots = addCost(result.buy, row.needed, record, mat.itemID, result.missing)
         end
     end
     if result.scannedAt and integer(context.now, 1) then

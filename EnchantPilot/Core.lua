@@ -21,6 +21,9 @@ end
 local function notify(code)
     ns.notice = code
     log(code)
+    if ns.Workshop and ns.engine then
+        ns.Workshop.Series(ns.engine.session, ns.engine.reason or code)
+    end
 end
 local function printMessage(text)
     if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage('|cff70dcc5EnchantPilot|r: '..text) end
@@ -152,10 +155,10 @@ function ns.ScanPrices()
     return ok, why
 end
 
-function ns.GoalMaterials(scope, original, preview)
+function ns.GoalMaterials(scope, original, preview, target)
     local skill, maximum = ns.Leveling.Skill()
     local replacements = preview or (not original and ns.db.routeReplacements or nil)
-    local plan, issue, limit, changed, blocked = ns.Leveling.GoalPlan(skill, ns.db.levelingGoal, maximum, scope, replacements)
+    local plan, issue, limit, changed, blocked = ns.Leveling.GoalPlan(skill, target or ns.db.levelingGoal, maximum, scope, replacements)
     local materials = ns.PriceModel.CombineRecipes(plan, A.ReagentCount)
     local bank = ns.db.personalBank
     if type(bank) == 'table' and type(bank.counts) == 'table' then
@@ -426,9 +429,10 @@ function ns.RefreshInventory()
     local nativeTarget,targetReason=A.NativeTarget()
     if targetReason then
         ns.items={};ns.inventoryStats.reason=targetReason;ns.inventoryStats.eligible=0
-    elseif nativeTarget then
+    else
         for i=#ns.items,1,-1 do
-            if ns.items[i].guid==nativeTarget then
+            local guid = ns.items[i].guid
+            if guid==nativeTarget or (ns.enchantTarget and guid==ns.enchantTarget.guid) then
                 table.remove(ns.items,i)
                 ns.inventoryStats.blocked=(ns.inventoryStats.blocked or 0)+1
                 ns.inventoryStats.reasons=ns.inventoryStats.reasons or {}
@@ -514,7 +518,8 @@ function ns.PreDisenchant(button,mouseButton,down)
     local valid,reason=validateDE(selected)
     if not valid then notify(reason);ns.selectedDE=nil;ns.RefreshInventory();return end
     ns.engine:Pause('user_pause')
-    ns.dePending={guid=selected.guid,link=selected.link,startedAt=now()}
+    local prediction = ns.Disenchant and ns.Disenchant.Outcomes(selected)
+    ns.dePending={guid=selected.guid,link=selected.link,itemID=selected.itemID,prediction=prediction,startedAt=now()}
     button:SetAttribute('useOnKeyDown',false)
     button:SetAttribute('pressAndHoldAction',false)
     button:SetAttribute('spell',13262)
@@ -602,6 +607,9 @@ local function handleCast(event,unit,castGUID,spellID)
             ns.pendingHadPopup=false
             ns.pendingProgrammatic=false
             clearPopup();notify(ns.engine.reason)
+            if ns.Workshop and A.RecipeReagents then
+                ns.Workshop.Series(session, ns.engine.reason, A.RecipeReagents(id))
+            end
             if ns.engine.state=='complete' and ns.db.sound and PlaySound then pcall(PlaySound,12867,'Master') end
         end
     elseif event=='UNIT_SPELLCAST_FAILED' or event=='UNIT_SPELLCAST_FAILED_QUIET' or event=='UNIT_SPELLCAST_INTERRUPTED' then

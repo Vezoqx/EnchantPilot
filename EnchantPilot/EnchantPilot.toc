@@ -3,7 +3,7 @@
 ## Notes: Guided repeat enchants, exact-item protection and profession tools. Beta for WoW Forever.
 ## Notes-ruRU: Удобная прокачка наложения чар: серия, реагенты, защита предмета. Бета для WoW Forever.
 ## Author: Vezoqx
-## Version: 0.2.59-beta
+## Version: 0.2.60-beta
 ## SavedVariablesPerCharacter: EnchantPilotDB
 Locale.lua
 Engine.lua
@@ -17,6 +17,7 @@ PriceModel.lua
 Auction.lua
 ReagentIcons.lua
 Leveling.lua
+Workshop.lua
 UI.lua
 VersionNotice.lua
 Core.lua

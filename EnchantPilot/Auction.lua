@@ -121,6 +121,7 @@ local function save(complete, offers)
     if type(stamp) ~= 'number' or stamp <= 0 or stamp >= math.huge or stamp ~= math.floor(stamp) then return end
     rows[cacheKey] = {itemID=scan.id, itemKey=scan.key, marketKey=scan.market, source='C_AuctionHouse',
         scannedAt=stamp, complete=complete, whole=scan.commodity == false, offers=offers}
+    if ns.Workshop and not scan.equipment then ns.Workshop.RecordPrice(rows[cacheKey]) end
     if complete and scan.report then
         local key = #offers > 0 and 'priced' or 'empty'
         scan.report[key] = scan.report[key] + 1
