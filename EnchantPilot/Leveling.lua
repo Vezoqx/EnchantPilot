@@ -36,6 +36,38 @@ local trainers = {
     {{1418,41,11,"Аннора (вход в Ульдаман)","Annora (Uldaman entrance)"}},
 }
 
+-- Wowhead Forever: example vendor offers, in copper per listed pack.
+G.reagentSources = {
+    [4470] = {"source_supply", 38, 1},
+    [6217] = {"source_copper_vendor", 130, 1},
+    [8925] = {"source_vial_vendor", 2500, 5},
+    [11291] = {"source_wood_vendor", 4500, 1},
+    [247786] = {"source_enchant_vendor", 10, 1},
+    [6338] = {"source_blacksmith"},
+    [11128] = {"source_blacksmith"},
+    [11144] = {"source_blacksmith"},
+    [16206] = {"source_blacksmith"},
+    [10940] = {"source_dust_vendor", 8, 1},
+    [10938] = {"source_disenchant"},
+    [10998] = {"source_disenchant"},
+    [11082] = {"source_disenchant"},
+    [11083] = {"source_disenchant"},
+    [11135] = {"source_disenchant"},
+    [11137] = {"source_disenchant"},
+    [11176] = {"source_disenchant"},
+    [16203] = {"source_disenchant"},
+    [16204] = {"source_disenchant"},
+    [14343] = {"source_disenchant"},
+    [14344] = {"source_disenchant"},
+}
+
+function G.StageDraft(step, skill, maximum, goal)
+    if not skill or skill < step[1] or #step[5] == 0 then return end
+    local target = math.min(step[2], maximum or skill, goal)
+    if target <= skill then return end
+    return math.ceil(step[4] * (target - skill) / (step[2] - step[1])), target
+end
+
 -- Wowhead Forever NPC 11073, confirmed spells (not profession rank services).
 G.annoraRecipes = {
     {14293,10}, {7420,15}, {7426,40}, {7454,45}, {7457,50}, {7748,60},

@@ -265,7 +265,8 @@ local function setTab(key)
         if name == key then panel:Show() else panel:Hide() end
         if U.tabs[name] then
             local selected = name == key or (key == "targets" and name == "enchant")
-                or ((key == "budget" or key == "annora" or key == "goal" or key == "replacements") and name == "leveling")
+                or ((key == "budget" or key == "annora" or key == "goal" or key == "replacements"
+                    or key == "routeCheck") and name == "leveling")
                 or (key == "savings" and name == "prices")
             U.tabs[name].background:SetColorTexture(unpackValues(selected and C.selected or C.button))
             U.tabs[name].label:SetTextColor(unpackValues(selected and C.teal or C.muted))
@@ -277,6 +278,7 @@ local function setTab(key)
     elseif key == "replacements" then U.RenderReplacements()
     elseif key == "annora" then U.RenderAnnora()
     elseif key == "goal" then U.RenderGoal()
+    elseif key == "routeCheck" then U.RenderRouteCheck()
     elseif key == "history" then U.RenderHistory()
     elseif key == "leveling" then
         U.guidePage = ns.Leveling.Stage(ns.Leveling.Skill())
@@ -367,6 +369,7 @@ local function createEnchant(panel)
     U.checks.sound = checkbox(panel, 315, 367, 89, L.soundShort or L.sound, "sound", L.sound)
     text(panel, 0, 392, 404, 26, L.nativeConfirmHint, 9.5, C.muted)
     U.status = text(panel, 0, 422, 404, 31, "", 10.5, C.amber)
+    U.stageReturn = button(panel, 274, 422, 130, 24, L.stage_return, function() setTab("leveling") end)
     U.action = button(panel, 0, 460, 226, 36, L.start, function() if ns.Act then ns.Act() end end, true)
     U.pause = button(panel, 232, 460, 62, 36, L.pause, function() if ns.Pause then ns.Pause("user_pause") end end)
     U.reset = button(panel, 300, 460, 104, 36, L.reset, function() if ns.Reset then ns.Reset() end end)
@@ -702,7 +705,43 @@ local function createGuide(panel)
     guide.next = button(panel, 306, 293, 98, 27, L.nextPage, function()
         U.guidePage=U.guidePage+1; U.RenderGuide()
     end)
-    guide.add = button(panel, 105, 293, 194, 27, L.route_add, function()
+    guide.start = button(panel, 101, 293, 103, 27, L.stage_start, function()
+        local step = ns.Leveling.steps[U.guidePage]
+        local skill, cap = ns.Leveling.Skill()
+        local count, target = ns.Leveling.StageDraft(step, skill, cap, ns.db.levelingGoal or 300)
+        local replacement = ns.db.routeReplacements[step[1]]
+        local id = replacement and replacement.recipeID or step[3]
+        if not count or ns.Leveling.ReplacementExhausted(step, replacement, skill)
+            or ns.Catalog.CanSkillUp(id, skill) == false then
+            guide.notice:SetText(L.stage_cannot_start)
+            return
+        end
+        if ns.dePending or ns.engine:GetView().inFlight then
+            guide.notice:SetText(translated("busy"))
+            return
+        end
+        for _, recipe in ipairs(ns.Catalog.List("", "learned", ns.db.favorites)) do
+            if recipe.recipeID == id and recipe.learned then
+                if not recipe.isEnchantingRecipe then
+                    ns.Pause("recipe_changed")
+                    local ready, reason = ns.Adapter.PrepareEnchantRecipe(id)
+                    guide.notice:SetText((ready or reason == "choose_target") and L.stage_native_craft or translated(reason))
+                    return
+                end
+                if not ns.enchantRecipe or ns.enchantRecipe.recipeID ~= id then ns.enchantTarget = nil end
+                ns.enchantRecipe = recipe
+                U.stageDraft = {id=id, target=target}
+                ns.db.count, ns.db.skillGoal, ns.db.stopOnGray = count, target, true
+                U.inputs.count:SetText(tostring(count))
+                U.inputs.skillGoal:SetText(tostring(target))
+                U.checks.stopOnGray:SetChecked(true)
+                setTab("enchant")
+                return
+            end
+        end
+        guide.notice:SetText(L.stage_need_recipe)
+    end, true)
+    guide.add = button(panel, 208, 293, 94, 27, L.stage_add_short, function()
         local step = ns.Leveling.steps[U.guidePage]
         local replacement = ns.db.routeReplacements[step[1]]
         local entry = {recipeID=replacement and replacement.recipeID or step[3], guideStage=step[1], name=guide.name:GetText(),
@@ -787,6 +826,7 @@ function U.RenderGuide()
         else row:Hide() end
     end
     enabled(guide.add, #guide.items>0 and not exhausted)
+    enabled(guide.start, not exhausted and ns.Leveling.StageDraft(step, skill, maximum, ns.db.levelingGoal or 300) ~= nil)
     enabled(guide.previous, U.guidePage>1)
     enabled(guide.next, U.guidePage<#ns.Leveling.steps)
     for rank, control in ipairs(guide.trainers) do
@@ -1033,11 +1073,15 @@ function U.RenderPrices()
             row:SetSize(404, SHOPPING_ROW_HEIGHT)
             fill(row, 0, 0, 404, SHOPPING_ROW_HEIGHT-4, C.card)
             row.icon = framedIcon(row, 8, 9, 34)
-            row.name = text(row, 50, 4, 260, 16, "", 13, C.text, true)
+            row.name = text(row, 50, 4, 183, 16, "", 13, C.text, true)
             row.details = text(row, 50, 19, 346, 34, "", 11, C.text)
             row.search = button(row, 319, 3, 77, 17, L.auction_find, function()
                 searchAuction(row.query)
             end)
+            row.source = button(row, 237, 3, 78, 17, L.reagent_source, function()
+                U.ShowDiagnostics(row.source.url, L.sourceWowhead)
+            end)
+            tooltip(row.source)
             tooltip(row.search, L.auction_find_hint)
             U.shoppingRows[i] = row
         end
@@ -1059,6 +1103,13 @@ function U.RenderPrices()
             details = details .. "\n" .. string.format(L.auction_summary_min, money(minimum))
         end
         row.details:SetText(details)
+        local source = ns.Leveling.reagentSources[material.itemID]
+        row.source.url = "https://www.wowhead.com/forever/item=" .. material.itemID
+        local acquisition = source and L[source[1]] or L.reagent_source_unknown
+        if source and source[2] then
+            acquisition = acquisition .. "\n" .. string.format(L.reagent_vendor_price, money(source[2]), source[3])
+        end
+        row.source.tooltip = acquisition .. "\n" .. details .. "\n" .. L.sourceWowhead
         enabled(row.search, status and status.open and not name:match("^#%d+$"))
         row:Show()
     end
@@ -1311,6 +1362,7 @@ local function createGoal(panel)
         else U.tracker.page=1; U.tracker:Show(); U.RenderTracker() end
         U.RenderGoal()
     end)
+    button(panel, 205, 285, 199, 29, L.route_check, function() setTab("routeCheck") end)
     button(panel, 0, 465, 106, 29, L.previous, function() setTab("leveling") end)
 
     local tracker = CreateFrame("Frame", nil, UIParent)
@@ -1430,7 +1482,7 @@ function U.RenderBudget()
         if not staleSkill and recipe.learned and recipe.canSkillUp and recipe.recipeID ~= stage then
             local quote = singleCraft(recipe)
             local cost, approximate = estimatedCost(quote, "buy", summary)
-            if exhausted or not stage or known ~= true or baseline == nil or (cost ~= nil and cost < baseline) then
+            if U.budgetStep or exhausted or not stage or known ~= true or baseline == nil or (cost ~= nil and cost < baseline) then
                 local full, fullApprox = estimatedCost(quote, "full", summary)
                 entries[#entries+1] = {recipe=recipe, cost=cost, approximate=approximate, full=full, fullApprox=fullApprox}
             end
@@ -1447,10 +1499,17 @@ function U.RenderBudget()
         or (#entries == 0 and L.stage_no_alternatives
         or (cacheReason == "catalog_cached" and L.budget_cached) or ""))
     listPage(list, entries)
+    local scope = "goal"
+    local routeCost, routeApprox
+    if U.budgetStep and #U.budgetStep[5] > 0 then
+        local current, _, _, _, _, blocked = ns.GoalMaterials(scope)
+        if not blocked then routeCost, routeApprox = estimatedCost(ns.QuoteMaterials(current, 1, 0), "buy", summary) end
+    end
     for _, row in ipairs(list.rows) do
         local entry = row.entry
         row.replace.pick = nil
         row.replace:Hide()
+        row.compare:SetText("")
         if entry then
             row.name:SetText(entry.recipe.name)
             row.detail:SetText(string.format(L.stage_costs, price(entry.full, entry.fullApprox), price(entry.cost, entry.approximate)))
@@ -1459,11 +1518,78 @@ function U.RenderBudget()
             end
             local materials = U.budgetStep and #U.budgetStep[5] > 0 and ns.Adapter.RecipeReagents(entry.recipe.recipeID)
             if materials and #materials > 0 then
+                local preview = {}
+                for first, replacement in pairs(ns.db.routeReplacements) do preview[first] = replacement end
+                preview[U.budgetStep[1]] = {recipeID=entry.recipe.recipeID, materials=materials}
+                local planned, _, _, _, _, blocked = ns.GoalMaterials(scope, false, preview)
+                local total, approximate
+                if not blocked then total, approximate = estimatedCost(ns.QuoteMaterials(planned, 1, 0), "buy", summary) end
+                local delta = total and routeCost and (total-routeCost)
+                row.compare:SetText(string.format(L.stage_preview, total and price(total, approximate) or "?",
+                    delta and ((delta > 0 and "+" or delta < 0 and "-" or "")
+                        .. price(math.abs(delta), approximate or routeApprox)) or "?"))
                 row.replace.pick = function()
                     saveReplacement(U.budgetStep, {recipeID=entry.recipe.recipeID, name=entry.recipe.name, materials=materials})
                 end
                 row.replace:Show()
             end
+        end
+    end
+end
+
+function U.RenderRouteCheck()
+    local list = U.routeCheckList
+    local skill, cap = ns.Leveling.Skill()
+    local goal = ns.db.levelingGoal or 300
+    local entries = {}
+    if skill and goal > skill then
+        for i, step in ipairs(ns.Leveling.steps) do
+            if step[2] > skill and step[1] < goal then
+                local replacement = ns.db.routeReplacements[step[1]]
+                local id = replacement and replacement.recipeID or step[3]
+                local learned = ns.Catalog.IsLearned(id)
+                local name = replacement and replacement.name
+                    or (C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id)) or ("#" .. id)
+                local issues = {}
+                if cap and math.min(step[2], goal) > cap then issues[#issues+1] = L.route_check_trainer end
+                if ns.Leveling.ReplacementExhausted(step, replacement, skill) then
+                    issues[#issues+1] = L.stage_exhausted
+                elseif learned ~= true and #step[5] > 0 then
+                    issues[#issues+1] = learned == false and L.unlearned or L.route_check_unknown
+                end
+                if #issues > 0 then
+                    entries[#entries+1] = {name=string.format(L.stage_saved_range, step[1], step[2]) .. " / " .. name,
+                        detail=table.concat(issues, " / "), index=i}
+                end
+            end
+        end
+        local materials = ns.GoalMaterials("goal")
+        if #materials > 0 then
+            local quote, summary = ns.QuoteMaterials(materials, 1, 0), auctionSummary()
+            for _, material in ipairs(materials) do
+                local item = quote.shopping and quote.shopping[material.itemID]
+                if item and (item.issue or quote.stale) and item.needed ~= 0 then
+                    local minimum = summary and summary.prices[material.itemID]
+                    entries[#entries+1] = {name=reagentName(material),
+                        detail=finite(minimum) and minimum > 0 and L.route_check_summary
+                            or (not item.issue and L.auction_stale or L.route_check_price)}
+                end
+            end
+        end
+    end
+    list.hint:SetText(not skill and L.goal_no_skill or #entries > 0 and L.route_check_hint or L.route_check_clear)
+    listPage(list, entries)
+    for _, row in ipairs(list.rows) do
+        local entry = row.entry
+        if entry then
+            row.name:SetText(entry.name)
+            row.detail:SetText(entry.detail)
+            row.tooltip = entry.name .. "\n" .. entry.detail
+            if entry.index then row.pick = function()
+                setTab("leveling")
+                U.guidePage = entry.index
+                U.RenderGuide()
+            end end
         end
     end
 end
@@ -1609,13 +1735,14 @@ function U.Create()
     createInventory(U.panels.disenchant)
     createPrices(U.panels.prices)
     createGuide(U.panels.leveling)
-    for _, key in ipairs({"plan", "budget", "history", "annora", "goal", "replacements", "savings"}) do
+    for _, key in ipairs({"plan", "budget", "history", "annora", "goal", "replacements", "savings", "routeCheck"}) do
         local panel = CreateFrame("Frame", nil, frame)
         panel:SetPoint("TOPLEFT", frame, "TOPLEFT", 18, -102)
         panel:SetSize(404, 500)
         U.panels[key] = panel
     end
     createGoal(U.panels.goal)
+    createList(U.panels.routeCheck, L.route_check, "", "routeCheckList", U.RenderRouteCheck, "goal")
     text(U.panels.savings, 0, 0, 404, 25, L.stage_why, 16, C.teal)
     U.savingsDetail = text(U.panels.savings, 0, 36, 404, 190, "", 13, C.text)
     U.savingsDetail:SetJustifyV("TOP")
@@ -1676,7 +1803,12 @@ function U.Create()
     budget.note = text(U.panels.budget, 112, 468, 290, 22, "", 10, C.amber)
     budget.reset = button(U.panels.budget, 260, 465, 144, 29, L.stage_reset, function() saveReplacement(U.budgetStep) end)
     for _, row in ipairs(budget.rows) do
-        row.replace = button(row, 310, 5, 88, 15, L.stage_replace, function(self) if self.pick then self.pick() end end)
+        row.name:SetHeight(12)
+        row.detail:ClearAllPoints()
+        row.detail:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -14)
+        row.detail:SetHeight(12)
+        row.compare = text(row, 8, 26, 388, 12, "", 10, C.teal, true)
+        row.replace = button(row, 310, 3, 88, 15, L.stage_replace, function(self) if self.pick then self.pick() end end)
     end
     createList(U.panels.history, L.de_history, L.de_history_hint, "historyList", U.RenderHistory, "disenchant")
     text(frame, 18, 614, 286, 29, L.keyHelp, 9, C.muted)
@@ -1806,6 +1938,11 @@ function U.Render(snapshot, reason)
         or (reason == "choose_target" and ns.enchantTarget))
         and not view.inFlight then code = ns.enchantTarget and "enchant_target_ready" or "enchant_pick_target" end
     U.status:SetText(translated(code))
+    local draft = U.stageDraft
+    local stageFinished = draft and ns.locked and ns.locked.recipeID == draft.id and view.skillGoal == draft.target
+        and (view.reason == "skill_goal" or view.reason == "gray" or view.state == "complete")
+    U.status:SetWidth(stageFinished and 266 or 404)
+    if stageFinished then U.stageReturn:Show() else U.stageReturn:Hide() end
     local calm = code == "ready" or code == "idle" or code == "requesting" or code == "confirming" or code == "sessionChanged"
     U.status:SetTextColor(unpackValues((code == "complete" or code == "skill_goal") and C.teal or (calm and C.muted or C.amber)))
     local title = L.start

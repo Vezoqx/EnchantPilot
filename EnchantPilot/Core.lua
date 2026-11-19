@@ -152,9 +152,9 @@ function ns.ScanPrices()
     return ok, why
 end
 
-function ns.GoalMaterials(scope, original)
+function ns.GoalMaterials(scope, original, preview)
     local skill, maximum = ns.Leveling.Skill()
-    local replacements = not original and ns.db.routeReplacements or nil
+    local replacements = preview or (not original and ns.db.routeReplacements or nil)
     local plan, issue, limit, changed, blocked = ns.Leveling.GoalPlan(skill, ns.db.levelingGoal, maximum, scope, replacements)
     local materials = ns.PriceModel.CombineRecipes(plan, A.ReagentCount)
     local bank = ns.db.personalBank
