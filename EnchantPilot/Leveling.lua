@@ -87,6 +87,16 @@ function G.Trainer(rank, horde)
     return trainers[rank][horde and 2 or 1] or trainers[rank][1]
 end
 
+function G.TrainerRecipes(rank)
+    if rank == 3 then return G.annoraRecipes end
+    local list = {}
+    for id, lesson in pairs(lessons) do
+        if lesson[2] == rank then list[#list+1] = {id, lesson[1]} end
+    end
+    table.sort(list, function(a,b) return a[2] == b[2] and a[1] < b[1] or a[2] < b[2] end)
+    return list
+end
+
 function G.MarkTrainer(trainer)
     local map, x, y = trainer[1], trainer[2], trainer[3]
     if not C_Map or not C_Map.CanSetUserWaypointOnMap or not C_Map.CanSetUserWaypointOnMap(map)

@@ -1,5 +1,5 @@
 local _, ns = ...
-ns.VERSION = '0.2.52-beta'
+ns.VERSION = '0.2.53-beta'
 local en = {
     prices='Prices', auction_scan='Reagent prices',
     auction_approximate_total='Approximate cost: %s',
@@ -216,7 +216,7 @@ local ru = {
     plan_clamped='Количество уменьшено до доступного по реагентам, с учётом запаса.',
     not_enchanting='Открой собственное наложение чар.', catalog_unavailable='Каталог рецептов недоступен.', recipe_data_pending='Ожидаем данные о рецептах.',
     recipe_select_failed='Игра не смогла выбрать рецепт.', keep_data_unavailable='Не удалось прочитать метки «Сохранить».',
-    subtitle='Удобный ритм прокачки зачарования', beta='0.2.52-бета / Forever 1.60.1',
+    subtitle='Удобный ритм прокачки зачарования', beta='0.2.53-бета / Forever 1.60.1',
     prices='Цены', auction_scan='Цены реагентов',
     auction_approximate_total='Приблизительная стоимость: %s',
     auction_auto_started='Сканирую весь аукцион. Пока он открыт, скан повторяется каждые 15 минут.',
@@ -420,6 +420,18 @@ local ru = {
     loaded='Загружен. Открой наложение чар и введи /ep.', sessionChanged='Настройки применятся при фиксации новой серии.',
 }
 local extra = {
+    stage_alternative={"Stage alternatives", "Замена этапа"},
+    stage_compare={"Stage: %s\nMissing materials for one attempt: %s", "Этап: %s\nДокупка на одну попытку: %s"},
+    stage_costs={"Per attempt: %s  /  To buy: %s", "За попытку: %s  /  Докупить: %s"},
+    stage_no_alternatives={"No cheaper eligible recipes found.", "Подходящих более дешёвых рецептов нет."},
+    stage_no_comparison={"Stage price unknown. Showing available recipes.", "Цена этапа неизвестна. Показаны доступные рецепты."},
+    annora_hide_learned={"Hide learned", "Скрыть изученные"},
+    trainer_catalog={"Trainer recipes", "Рецепты учителей"},
+    trainer_annora={"Annora", "Аннора"},
+    trainer_route_hint={"Training recipes used in the leveling route.", "Рецепты этого учителя из маршрута прокачки."},
+    de_profit_tie={"|cffffcf67Same estimated value|r", "|cffffcf67Выгода одинаковая|r"},
+    de_profit_disenchant={"|cff75de91Disenchant +%s|r", "|cff75de91Распылить +%s|r"},
+    de_profit_vendor={"|cffffcf67Vendor +%s|r", "|cffffcf67Продать торговцу +%s|r"},
     next_action={"Next: %s", "Дальше: %s"},
     next_rank={"Learn %s from %s.", "Изучить ранг «%s». Учитель: %s."},
     next_rank_1={"Journeyman", "Подмастерье"}, next_rank_2={"Expert", "Умелец"}, next_rank_3={"Artisan", "Искусник"},

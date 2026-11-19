@@ -654,7 +654,11 @@ local function createGuide(panel)
     U.guide = guide
     text(panel, 0, 0, 168, 23, L.route_title, 14, C.teal, true)
     button(panel, 173, 0, 82, 25, L.goal_button, function() setTab("goal") end)
-    button(panel, 260, 0, 144, 25, L.budget_title, function() setTab("budget") end)
+    button(panel, 260, 0, 144, 25, L.stage_alternative, function()
+        U.budgetStage = ns.Leveling.steps[U.guidePage][3]
+        U.budgetList.page = 1
+        setTab("budget")
+    end)
     guide.stage = text(panel, 0, 35, 404, 19, "", 13, {0.70, 0.81, 1, 1}, true)
     guide.name = text(panel, 0, 61, 404, 19, "", 14, C.amber, true)
     guide.source = text(panel, 0, 87, 366, 32, "", 11, C.amber)
@@ -700,7 +704,7 @@ local function createGuide(panel)
         U.planPage=math.ceil(#ns.db.shoppingPlan/8); setTab("plan")
     end, true)
     text(panel, 0, 335, 280, 20, L.route_trainers, 13, C.teal)
-    button(panel, 282, 332, 122, 25, L.annora_title, function() setTab("annora") end)
+    button(panel, 282, 332, 122, 25, L.trainer_catalog, function() setTab("annora") end)
     guide.trainers = {}
     for rank=1,3 do
         guide.trainers[rank] = button(panel, 0, 363+(rank-1)*31, 404, 27, "", markTrainer)
@@ -824,7 +828,11 @@ local function createPrices(panel)
     end)
     tooltip(U.scanPrices, L.auction_scan_hint)
     button(panel, 244, 86, 78, 21, L.plan_short, function() setTab("plan") end)
-    button(panel, 326, 86, 78, 21, L.budget_short, function() setTab("budget") end)
+    button(panel, 326, 86, 78, 21, L.budget_short, function()
+        U.budgetStage = nil
+        U.budgetList.page = 1
+        setTab("budget")
+    end)
     U.priceStatus = text(panel, 0, 86, 239, 24, "", 10, C.amber)
     U.pricePlanCount = input(panel, 0, 111, 198, L.auction_plan_count, "pricePlanCount", L.auction_plan_count_hint, function()
         U.shoppingPage = 1
@@ -1049,6 +1057,7 @@ local function createInventory(panel)
     end
     U.deLootValue = text(panel, 0, 395, 404, 14, "", 11, C.amber, true)
     U.deVendorValue = text(panel, 0, 410, 404, 14, "", 11, C.muted, true)
+    U.deVendorValue:SetJustifyH("LEFT")
     U.keep = button(panel, 0, 425, 198, 25, L.keep, function() if ns.KeepSelected then ns.KeepSelected() end end)
     tooltip(U.keep)
     U.clearKeep = button(panel, 206, 425, 198, 25, L.restore, function() if ns.ClearKeep then ns.ClearKeep() end end)
@@ -1107,9 +1116,9 @@ local function updateCast()
 end
 
 local function createList(panel, title, hint, tab, render, closeTab)
-    text(panel, 0, 0, 404, 24, title, 16, C.teal)
-    text(panel, 0, 30, 404, 34, hint, 11, C.muted)
-    local list = {page=1, rows={}}
+    local list = {page=1, rows={},
+        title=text(panel, 0, 0, 404, 24, title, 16, C.teal),
+        hint=text(panel, 0, 30, 404, 34, hint, 11, C.muted)}
     for i=1,8 do
         local row = button(panel, 0, 74+(i-1)*43, 404, 40, "", function(self)
             if self.pick then self.pick() end
@@ -1248,25 +1257,41 @@ end
 
 function U.RenderAnnora()
     local list = U.annoraList
+    local rank = U.catalogTrainerRank or 3
+    local horde = UnitFactionGroup and UnitFactionGroup("player") == "Horde"
+    local localeIndex = GetLocale and GetLocale() == "ruRU" and 4 or 5
+    list.title:SetText(rank == 3 and L.annora_title or ns.Leveling.Trainer(rank,horde)[localeIndex])
+    list.hint:SetText(rank == 3 and L.annora_hint or L.trainer_route_hint)
+    for i, control in ipairs(list.trainers) do
+        control:SetText(i == 3 and L.trainer_annora or ns.Leveling.Trainer(i,horde)[localeIndex])
+        control.background:SetColorTexture(unpackValues(i == rank and C.selected or C.button))
+    end
     local skill, maximum = ns.Leveling.Skill()
     local level = UnitLevel and UnitLevel("player")
     local known = {}
     for _, recipe in ipairs(ns.Catalog.List("", "all", ns.db.favorites)) do
         known[recipe.recipeID] = recipe
     end
-    listPage(list, ns.Leveling.annoraRecipes)
+    local entries = {}
+    for _, entry in ipairs(ns.Leveling.TrainerRecipes(rank)) do
+        local id = entry[1]
+        local recipe = known[id]
+        local learned = recipe and recipe.learned
+        if learned == nil and C_TradeSkillUI and C_TradeSkillUI.GetRecipeInfo then
+            local info = C_TradeSkillUI.GetRecipeInfo(id)
+            if info then learned = info.learned end
+        end
+        if not ns.db.annoraHideLearned or learned ~= true then
+            entries[#entries+1] = {id=id, required=entry[2], recipe=recipe, learned=learned}
+        end
+    end
+    listPage(list, entries)
     for _, row in ipairs(list.rows) do
         local entry = row.entry
         if entry then
-            local id, required = entry[1], entry[2]
-            local recipe = known[id]
+            local id, required, recipe = entry.id, entry.required, entry.recipe
             local name = recipe and recipe.name or (C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id))
-            local learned = recipe and recipe.learned
-            if learned == nil and C_TradeSkillUI and C_TradeSkillUI.GetRecipeInfo then
-                local info = C_TradeSkillUI.GetRecipeInfo(id)
-                if info then learned = info.learned end
-            end
-            local status = ns.Leveling.AnnoraStatus(required, learned, skill, maximum, level)
+            local status = ns.Leveling.AnnoraStatus(required, entry.learned, skill, maximum, level)
             row.name:SetText(name or ("#" .. id))
             row.detail:SetText(string.format(L.annora_row, required, L[status]))
             local color = status == "learned" and C.muted or status == "route_available" and {0.47,0.87,0.57}
@@ -1282,25 +1307,46 @@ function U.RenderBudget()
     local rows, cacheReason = ns.Catalog.List("", "learned", ns.db.favorites)
     local summary = auctionSummary()
     local entries = {}
+    local stage = U.budgetStage
+    local known, baseline, baselineApprox
+    if stage then
+        known = ns.Catalog.IsLearned(stage)
+        baseline, baselineApprox = estimatedCost(singleCraft({recipeID=stage}), "buy", summary)
+    end
+    local function price(cost, approximate)
+        return cost and ((approximate and "~" or "") .. money(cost)) or L.budget_no_price
+    end
+    list.title:SetText(stage and L.stage_alternative or L.budget_title)
+    list.hint:SetText(stage and string.format(L.stage_compare,
+        (C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(stage)) or ("#" .. stage),
+        known == false and L.unlearned or price(baseline, baselineApprox)) or L.budget_hint)
+    local staleSkill = cacheReason == "catalog_cached" and ns.Leveling.Skill() ~= ns.db.lastEnchantingSkill
     for _, recipe in ipairs(rows) do
-        if recipe.canSkillUp then
+        if not staleSkill and recipe.learned and recipe.canSkillUp and recipe.recipeID ~= stage then
             local quote = singleCraft(recipe)
             local cost, approximate = estimatedCost(quote, "buy", summary)
-            entries[#entries+1] = {recipe=recipe, cost=cost, approximate=approximate}
+            if not stage or known ~= true or baseline == nil or (cost ~= nil and cost < baseline) then
+                local full, fullApprox = estimatedCost(quote, "full", summary)
+                entries[#entries+1] = {recipe=recipe, cost=cost, approximate=approximate, full=full, fullApprox=fullApprox}
+            end
         end
     end
     table.sort(entries, function(a,b)
         local x,y = a.cost or math.huge,b.cost or math.huge
         if x ~= y then return x < y end
+        x,y = a.full or math.huge,b.full or math.huge
+        if x ~= y then return x < y end
         return a.recipe.recipeID < b.recipe.recipeID
     end)
-    list.note:SetText(cacheReason == "catalog_cached" and L.budget_cached or "")
+    list.note:SetText(staleSkill and L.budget_cached or (stage and known ~= false and baseline == nil and L.stage_no_comparison)
+        or (#entries == 0 and L.stage_no_alternatives
+        or (cacheReason == "catalog_cached" and L.budget_cached) or ""))
     listPage(list, entries)
     for _, row in ipairs(list.rows) do
         local entry = row.entry
         if entry then
             row.name:SetText(entry.recipe.name)
-            row.detail:SetText(entry.cost and ((entry.approximate and "~" or "") .. money(entry.cost)) or L.budget_no_price)
+            row.detail:SetText(string.format(L.stage_costs, price(entry.full, entry.fullApprox), price(entry.cost, entry.approximate)))
             row.pick = function()
                 if ns.ChoosePriceRecipe(entry.recipe) then ns.combinedPlan=nil; setTab("prices") end
             end
@@ -1468,6 +1514,17 @@ function U.Create()
     end
     local budget = createList(U.panels.budget, L.budget_title, L.budget_hint, "budgetList", U.RenderBudget, "leveling")
     local annora = createList(U.panels.annora, L.annora_title, L.annora_hint, "annoraList", U.RenderAnnora, "leveling")
+    annora.trainers = {}
+    for i=1,3 do
+        annora.trainers[i] = button(U.panels.annora, (i-1)*135, 49, 134, 21, "", function()
+            U.catalogTrainerRank, annora.page = i, 1
+            U.RenderAnnora()
+        end)
+    end
+    U.annoraHideLearned = checkbox(U.panels.annora, 246, 0, 158, L.annora_hide_learned, "annoraHideLearned", L.annora_hide_learned, function()
+        annora.page = 1
+        U.RenderAnnora()
+    end)
     annora.note = text(U.panels.annora, 115, 470, 289, 25, "", 11, C.muted)
     budget.note = text(U.panels.budget, 112, 468, 290, 22, "", 10, C.amber)
     createList(U.panels.history, L.de_history, L.de_history_hint, "historyList", U.RenderHistory, "disenchant")
@@ -1689,7 +1746,8 @@ end
 
 local function renderDisenchantLoot(target)
     local vendor = target and target.sellPrice
-    U.deVendorValue:SetText(finite(vendor) and vendor > 0 and string.format(L.deVendorValue, money(vendor)) or "")
+    local vendorText = finite(vendor) and vendor >= 0 and string.format(L.deVendorValue, money(vendor)) or ""
+    U.deVendorValue:SetText(vendorText)
     local outcomes, samples, partial
     if ns.Disenchant then outcomes, samples, partial = ns.Disenchant.Outcomes(target) end
     U.deLootTitle:SetText(outcomes and (partial and L.deLootPartial
@@ -1747,6 +1805,12 @@ local function renderDisenchantLoot(target)
         or (value and string.format(valueLabel, money(value)))
         or (reason and status.open and translated(reason))
         or (status.open and L.deLootNoPrice or L.deLootNoCachedPrice))
+    if not partial and value and finite(vendor) and vendor >= 0 then
+        local difference = value-vendor
+        local advice = difference == 0 and L.de_profit_tie
+            or string.format(difference > 0 and L.de_profit_disenchant or L.de_profit_vendor, money(math.abs(difference)))
+        U.deVendorValue:SetText(vendorText .. "  /  " .. advice)
+    end
 end
 
 function U.RenderInventory()
