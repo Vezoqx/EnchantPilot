@@ -588,6 +588,10 @@ end
 function ns.OnEvent(event,...)
     if event=='PLAYER_LOGIN' then ns.Initialize();return end
     if not ns.initialized then return end
+    if event=='CHAT_MSG_ADDON' or event=='GROUP_ROSTER_UPDATE' or event=='PLAYER_GUILD_UPDATE' then
+        if ns.VersionNotice then ns.VersionNotice.OnEvent(event,...) end
+        return
+    end
     if event=='LOOT_READY' or event=='LOOT_OPENED' then captureDisenchantLoot();return end
     if event=='PLAYER_LOGOUT' then
         local view=ns.engine:GetView(ns.current)
@@ -750,6 +754,7 @@ function ns.Initialize()
     ns.initialized=true
     if ns.Catalog and ns.Catalog.RefreshCache then pcall(ns.Catalog.RefreshCache) end
     ns.UI.Create()
+    if ns.VersionNotice then ns.VersionNotice.Start() end
     ns.Refresh()
     printMessage(ns.L.loaded)
 end
@@ -765,6 +770,7 @@ SlashCmdList.ENCHANTPILOT=function(command)
     if not ns.initialized then ns.Initialize() end
     local cmd=(command or ''):lower():match('^%s*(%S*)')
     if cmd=='debug' then ns.Debug()
+    elseif cmd=='update' and ns.VersionNotice then ns.UI.ShowDiagnostics(ns.VersionNotice.url, ns.L.version_link)
     elseif cmd=='help' then printMessage(ns.L.help)
     elseif cmd=='resetposition' then
         ns.db.position=nil
@@ -773,7 +779,8 @@ SlashCmdList.ENCHANTPILOT=function(command)
     else ns.UI.Toggle() end
 end
 
-for _,event in ipairs({'PLAYER_LOGIN','PLAYER_LOGOUT','PLAYER_LEVEL_UP','LOOT_READY','LOOT_OPENED','TRAINER_SHOW','TRAINER_UPDATE','TRAINER_CLOSED',
+for _,event in ipairs({'PLAYER_LOGIN','PLAYER_LOGOUT','PLAYER_LEVEL_UP','CHAT_MSG_ADDON','GROUP_ROSTER_UPDATE','PLAYER_GUILD_UPDATE',
+    'LOOT_READY','LOOT_OPENED','TRAINER_SHOW','TRAINER_UPDATE','TRAINER_CLOSED',
     'PLAYER_REGEN_DISABLED','PLAYER_STARTED_MOVING','TRADE_SKILL_SHOW','TRADE_SKILL_CLOSE',
     'TRADE_SKILL_LIST_UPDATE','TRADE_SKILL_DATA_SOURCE_CHANGED','SKILL_LINES_CHANGED','NEW_RECIPE_LEARNED','BAG_UPDATE_DELAYED','GET_ITEM_INFO_RECEIVED',
     'EQUIPMENT_SETS_CHANGED','PLAYER_EQUIPMENT_CHANGED','REPLACE_TRADESKILL_ENCHANT','REPLACE_ENCHANT',

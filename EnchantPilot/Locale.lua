@@ -1,5 +1,5 @@
 local _, ns = ...
-ns.VERSION = '0.2.49-beta'
+ns.VERSION = '0.2.50-beta'
 local en = {
     prices='Prices', auction_scan='Reagent prices',
     auction_approximate_total='Approximate cost: %s',
@@ -216,7 +216,7 @@ local ru = {
     plan_clamped='Количество уменьшено до доступного по реагентам, с учётом запаса.',
     not_enchanting='Открой собственное наложение чар.', catalog_unavailable='Каталог рецептов недоступен.', recipe_data_pending='Ожидаем данные о рецептах.',
     recipe_select_failed='Игра не смогла выбрать рецепт.', keep_data_unavailable='Не удалось прочитать метки «Сохранить».',
-    subtitle='Удобный ритм прокачки зачарования', beta='0.2.49-бета / Forever 1.60.1',
+    subtitle='Удобный ритм прокачки зачарования', beta='0.2.50-бета / Forever 1.60.1',
     prices='Цены', auction_scan='Цены реагентов',
     auction_approximate_total='Приблизительная стоимость: %s',
     auction_auto_started='Сканирую весь аукцион. Пока он открыт, скан повторяется каждые 15 минут.',
@@ -420,6 +420,9 @@ local ru = {
     loaded='Загружен. Открой наложение чар и введи /ep.', sessionChanged='Настройки применятся при фиксации новой серии.',
 }
 local extra = {
+    version_notice={"EnchantPilot: you have %s. Another player has %s. Releases: %s (copy with /ep update).",
+        "EnchantPilot: у вас версия %s, у другого игрока — %s. Релизы: %s (копировать: /ep update)."},
+    version_link={"EnchantPilot releases", "Релизы EnchantPilot"},
     plan_title={"Shopping plan", "План покупок"}, plan_short={"Plan", "План"},
     plan_hint={"Add recipes and set the quantity for each.", "Добавьте рецепты и укажите количество для каждого."},
     plan_add={"Add recipe", "Добавить рецепт"}, plan_view={"Shopping list", "Список покупок"},
