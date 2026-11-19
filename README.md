@@ -12,7 +12,9 @@
 
 Интерфейс версии 0.2.49-beta в WoW Forever.
 
-![Прокачка Наложения чар](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.49-beta/leveling-0.2.49.png)
-![Каталог рецептов Анноры](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.49-beta/annora-0.2.49.png)
-![Аукционные цены и список покупок](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.49-beta/auction-prices-0.2.49.png)
-![Очередь распыления](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.49-beta/disenchant-0.2.49.png)
+![Зачарование](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.49-beta/enchanting-interface.png)
+![Каталог рецептов](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.49-beta/recipes-interface.png)
+![Изученные рецепты](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.49-beta/learned-recipes-interface.png)
+![Распыление](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.49-beta/disenchant-interface.png)
+![Цены и список покупок](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.49-beta/prices-interface.png)
+![Прокачка](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.49-beta/leveling-interface.png)
