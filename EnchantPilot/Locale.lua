@@ -1,5 +1,5 @@
 local _, ns = ...
-ns.VERSION = '0.2.55-beta'
+ns.VERSION = '0.2.56-beta'
 local en = {
     prices='Prices', auction_scan='Reagent prices',
     auction_approximate_total='Approximate cost: %s',
@@ -216,7 +216,7 @@ local ru = {
     plan_clamped='Количество уменьшено до доступного по реагентам, с учётом запаса.',
     not_enchanting='Открой собственное наложение чар.', catalog_unavailable='Каталог рецептов недоступен.', recipe_data_pending='Ожидаем данные о рецептах.',
     recipe_select_failed='Игра не смогла выбрать рецепт.', keep_data_unavailable='Не удалось прочитать метки «Сохранить».',
-    subtitle='Удобный ритм прокачки зачарования', beta='0.2.55-бета / Forever 1.60.1',
+    subtitle='Удобный ритм прокачки зачарования', beta='0.2.56-бета / Forever 1.60.1',
     prices='Цены', auction_scan='Цены реагентов',
     auction_approximate_total='Приблизительная стоимость: %s',
     auction_auto_started='Сканирую весь аукцион. Пока он открыт, скан повторяется каждые 15 минут.',
@@ -445,6 +445,12 @@ local extra = {
     de_profit_tie={"|cffffcf67Same estimated value|r", "|cffffcf67Выгода одинаковая|r"},
     de_profit_disenchant={"|cff75de91Disenchant +%s|r", "|cff75de91Распылить +%s|r"},
     de_profit_vendor={"|cffffcf67Vendor +%s|r", "|cffffcf67Продать торговцу +%s|r"},
+    de_profit_auction={"|cff75de91Auction +%s|r", "|cff75de91Выставить +%s|r"},
+    de_item_price={"Item on auction: %s (before fees)", "Предмет на аукционе: %s (до комиссии)"},
+    de_item_no_price={"Item on auction: no fresh matching buyout", "Предмет на аукционе: нет свежей цены выкупа"},
+    de_item_unavailable={"Item on auction: unavailable", "Предмет на аукционе: недоступен"},
+    de_scan_all={"Update prices", "Обновить цены"},
+    de_scan_all_hint={"Search for matching equipment and disenchant materials at the auction house.", "Ищет цены самого предмета и материалов распыления на открытом аукционе."},
     next_action={"Next: %s", "Дальше: %s"},
     next_rank={"Learn %s from %s.", "Изучить ранг «%s». Учитель: %s."},
     next_rank_1={"Journeyman", "Подмастерье"}, next_rank_2={"Expert", "Умелец"}, next_rank_3={"Artisan", "Искусник"},

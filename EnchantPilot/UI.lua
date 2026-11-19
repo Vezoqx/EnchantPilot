@@ -439,6 +439,11 @@ local function openShareMenu(owner, recipeID, rememberName)
     Menu.GetManager():OpenMenu(owner, menu, anchor)
 end
 
+local function recipeSkillRequirement(recipe)
+    local required = ns.Catalog.LearningRequirements(recipe.recipeID)
+    return required and required[1] or ns.Leveling.RequiredSkill(recipe.recipeID), required
+end
+
 local function recipeTooltip(row)
     if not row.recipe then return end
     local materials = ns.Adapter and ns.Adapter.RecipeReagents and ns.Adapter.RecipeReagents(row.recipe.recipeID)
@@ -479,18 +484,20 @@ local function recipeTooltip(row)
             lines[#lines+1] = string.format(L.recipeReagentStock, stock, price)
         end
     end
-    if not row.recipe.learned then
-        local required = ns.Catalog.LearningRequirements(row.recipe.recipeID)
-        if required then
-            local requirement = string.format(L.learn_skill, required[1])
-            if required[2] and required[2] > 0 then
-                local faction = C_Reputation and C_Reputation.GetFactionDataByID and C_Reputation.GetFactionDataByID(required[2])
-                local standing = _G["FACTION_STANDING_LABEL" .. (required[3]+1)]
-                requirement = requirement .. "\n" .. string.format(L.learn_rep,
-                    faction and faction.name or ("#" .. required[2]), standing or tostring(required[3]+1))
-            end
-            lines[#lines+1] = requirement
+    local minimum, required = recipeSkillRequirement(row.recipe)
+    if minimum then
+        local skill = ns.Leveling.Skill()
+        local requirement = string.format(L.learn_skill, minimum)
+        if finite(skill) and skill > 0 then
+            requirement = (skill < minimum and "|cffff7575" or "|cff75de91") .. requirement .. "|r"
         end
+        lines[#lines+1] = requirement
+    end
+    if not row.recipe.learned and required and required[2] and required[2] > 0 then
+        local faction = C_Reputation and C_Reputation.GetFactionDataByID and C_Reputation.GetFactionDataByID(required[2])
+        local standing = _G["FACTION_STANDING_LABEL" .. (required[3]+1)]
+        lines[#lines+1] = string.format(L.learn_rep,
+            faction and faction.name or ("#" .. required[2]), standing or tostring(required[3]+1))
     end
     return table.concat(lines, "\n")
 end
@@ -1024,7 +1031,7 @@ local function createInventory(panel)
     tooltip(U.sortValue, L.de_sort_hint)
     U.inventoryRows = {}
     for i = 1, INVENTORY_ROWS do
-        local row = button(panel, 0, 98 + (i - 1) * 33, 404, 31, "", function(self)
+        local row = button(panel, 0, 98 + (i - 1) * 29, 404, 27, "", function(self)
             if self.item and ns.SelectDE then ns.SelectDE(self.item) end
         end)
         row.icon = row:CreateTexture(nil, "ARTWORK")
@@ -1045,29 +1052,33 @@ local function createInventory(panel)
     end
     U.inventoryEmpty = text(panel, 18, 157, 368, 72, L.deEmpty, 11, C.muted)
     U.inventoryEmpty:SetJustifyH("CENTER")
-    U.inventoryBack = button(panel, 0, 267, 88, 25, L.previous, function() U.inventoryPage = U.inventoryPage - 1; U.RenderInventory() end)
-    U.inventoryNext = button(panel, 316, 267, 88, 25, L.nextPage, function() U.inventoryPage = U.inventoryPage + 1; U.RenderInventory() end)
-    U.inventoryPagination = text(panel, 96, 274, 212, 18, "", 10, C.muted, true)
+    U.inventoryBack = button(panel, 0, 247, 88, 25, L.previous, function() U.inventoryPage = U.inventoryPage - 1; U.RenderInventory() end)
+    U.inventoryNext = button(panel, 316, 247, 88, 25, L.nextPage, function() U.inventoryPage = U.inventoryPage + 1; U.RenderInventory() end)
+    U.inventoryPagination = text(panel, 96, 254, 212, 18, "", 10, C.muted, true)
     U.inventoryPagination:SetJustifyH("CENTER")
-    fill(panel, 0, 298, 404, 32, C.card)
+    fill(panel, 0, 278, 404, 32, C.card)
     U.dePreviewIcon = panel:CreateTexture(nil, "ARTWORK")
-    U.dePreviewIcon:SetPoint("TOPLEFT", panel, "TOPLEFT", 5, -301)
+    U.dePreviewIcon:SetPoint("TOPLEFT", panel, "TOPLEFT", 5, -281)
     U.dePreviewIcon:SetSize(26, 26)
-    U.dePreviewCaption = text(panel, 38, 299, 358, 12, "", 9, C.muted, true)
-    U.selectedItem = text(panel, 38, 311, 358, 16, L.deSelect, 12, C.text, true)
-    U.deLootTitle = text(panel, 0, 335, 245, 15, "", 12, C.teal, true)
-    U.deLootScan = button(panel, 254, 332, 150, 19, L.deLootScan, function()
-        local ok, reason = ns.Auction.Start(U.deLootIDs)
+    U.dePreviewCaption = text(panel, 38, 279, 358, 12, "", 9, C.muted, true)
+    U.selectedItem = text(panel, 38, 291, 358, 16, L.deSelect, 12, C.text, true)
+    U.deLootTitle = text(panel, 0, 315, 245, 15, "", 12, C.teal, true)
+    U.deLootScan = button(panel, 254, 312, 150, 19, L.de_scan_all, function()
+        local ok, reason = ns.Auction.Start(U.deLootIDs, nil, U.deAuctionTarget)
+        if not ok and reason == "de_item_unavailable" and #U.deLootIDs > 0 then
+            ok, reason = ns.Auction.Start(U.deLootIDs)
+        end
         if ok then ns.priceScanSelection = nil end
         U.deLootScanError = not ok and reason or nil
         U.RenderInventory()
     end)
-    tooltip(U.deLootScan, L.deLootScanHint)
+    tooltip(U.deLootScan, L.de_scan_all_hint)
     U.deLootRows = {}
     for i = 1, 3 do
-        U.deLootRows[i] = text(panel, 2, 351 + (i - 1) * 14, 402, 14, "", 11, C.text, true)
+        U.deLootRows[i] = text(panel, 2, 331 + (i - 1) * 14, 402, 14, "", 11, C.text, true)
     end
-    U.deLootValue = text(panel, 0, 395, 404, 14, "", 11, C.amber, true)
+    U.deLootValue = text(panel, 0, 375, 404, 14, "", 11, C.amber, true)
+    U.deAuctionValue = text(panel, 0, 391, 404, 14, "", 11, C.muted, true)
     U.deVendorValue = text(panel, 0, 410, 404, 14, "", 11, C.muted, true)
     U.deVendorValue:SetJustifyH("LEFT")
     U.keep = button(panel, 0, 425, 198, 25, L.keep, function() if ns.KeepSelected then ns.KeepSelected() end end)
@@ -1739,6 +1750,7 @@ function U.RenderRecipes()
         control.background:SetColorTexture(unpackValues(mode == U.recipeMode and C.selected or C.button))
         control.label:SetTextColor(unpackValues(mode == U.recipeMode and C.teal or C.muted))
     end
+    local skill = ns.Leveling.Skill()
     for i, row in ipairs(U.recipeRows) do
         local recipe = U.recipeList[first + i - 1]
         row.recipe = recipe
@@ -1746,6 +1758,9 @@ function U.RenderRecipes()
         if recipe then
             row.icon:SetTexture(recipe.icon or 136244)
             row.name:SetText(recipe.name)
+            local minimum = recipeSkillRequirement(recipe)
+            row.name:SetTextColor(unpackValues(minimum and finite(skill) and skill > 0 and skill < minimum
+                and {1, 0.46, 0.46} or C.text))
             row.detail:SetText(recipe.learned and L.learned or L.unlearned)
             row.detail:SetTextColor(unpackValues(recipe.learned and C.muted or C.amber))
             if recipe.favorite then row.star:Show() else row.star:Hide() end
@@ -1776,9 +1791,13 @@ local function renderDisenchantLoot(target)
     U.deVendorValue:SetText(vendorText)
     local outcomes, samples, partial
     if ns.Disenchant then outcomes, samples, partial = ns.Disenchant.Outcomes(target) end
+    local auction = ns.Auction
+    local tradable = target and target.auctionable and auction and auction.EquipmentPrice
+    U.deAuctionTarget = tradable and target or nil
+    U.deAuctionValue:SetText("")
     U.deLootTitle:SetText(outcomes and (partial and L.deLootPartial
         or (samples and string.format(L.deLootTitle, samples) or L.deLootEstimated)) or "")
-    if outcomes then U.deLootScan:Show() else U.deLootScan:Hide() end
+    if outcomes or tradable then U.deLootScan:Show() else U.deLootScan:Hide() end
     if U.deLootTarget ~= (target and target.guid) then
         U.deLootTarget = target and target.guid
         U.deLootScanError = nil
@@ -1804,37 +1823,48 @@ local function renderDisenchantLoot(target)
     end
     U.deLootIDs = ids
     U.deLootValue:SetText("")
-    if not outcomes then return end
-    local auction = ns.Auction
+    if not target or not auction then return end
     local status = auction.GetStatus()
     local scanning = status.state == "auction_scanning"
     enabled(U.deLootScan, status.open and not scanning)
     local market = auction.MarketKey()
-    local prices = auction.GetPrices(ids, market)
+    local prices = outcomes and auction.GetPrices(ids, market)
     local now, maxAge = GetServerTime and GetServerTime(), (tonumber(ns.db.priceStaleMinutes) or 30) * 60
     if maxAge == 0 then maxAge = 1800 end
+    local itemPrice
+    if tradable then
+        itemPrice = ns.PriceModel.CheapestUnitBuyout(auction.EquipmentPrice(target), now, maxAge)
+        if itemPrice then itemPrice = math.floor(itemPrice+0.5) end
+        U.deAuctionValue:SetText(itemPrice and string.format(L.de_item_price, money(itemPrice))
+            or (U.deLootScanError and translated(U.deLootScanError)) or L.de_item_no_price)
+    elseif target.auctionable == false then U.deAuctionValue:SetText(L.de_item_unavailable) end
     local value, valueLabel
-    if partial then
+    if outcomes and partial then
         local unit = ns.PriceModel.CheapestUnitBuyout(prices[ids[1]], now, maxAge)
         if unit then value = math.floor(unit + 0.5) end
         valueLabel = L.deLootUnit
-    else
+    elseif outcomes then
         value = ns.PriceModel.DisenchantValue(outcomes, prices, now, maxAge)
         valueLabel = L.deLootValue
     end
-    if not value and auction.GetSummary then
+    if outcomes and not value and auction.GetSummary then
         value = ns.PriceModel.DisenchantSummaryValue(outcomes, auction.GetSummary(), now, maxAge, partial)
         valueLabel = partial and L.deLootSummaryUnit or L.deLootSummaryValue
     end
     local reason = U.deLootScanError or status.reason
-    U.deLootValue:SetText(scanning and translated(status.state)
-        or (value and string.format(valueLabel, money(value)))
+    U.deLootValue:SetText(scanning and translated(status.state) or (outcomes and (
+        (value and string.format(valueLabel, money(value)))
         or (reason and status.open and translated(reason))
-        or (status.open and L.deLootNoPrice or L.deLootNoCachedPrice))
-    if not partial and value and finite(vendor) and vendor >= 0 then
-        local difference = value-vendor
-        local advice = difference == 0 and L.de_profit_tie
-            or string.format(difference > 0 and L.de_profit_disenchant or L.de_profit_vendor, money(math.abs(difference)))
+        or (status.open and L.deLootNoPrice or L.deLootNoCachedPrice))) or "")
+    local loot = not partial and value or nil
+    if (loot or itemPrice) and finite(vendor) and vendor >= 0 then
+        local auctionValue, lootValue = itemPrice or -math.huge, loot or -math.huge
+        local best = math.max(auctionValue, lootValue, vendor)
+        local second = best == auctionValue and math.max(lootValue,vendor)
+            or best == lootValue and math.max(auctionValue,vendor) or math.max(auctionValue,lootValue)
+        local advice = best == second and L.de_profit_tie or string.format(
+            best == auctionValue and L.de_profit_auction or best == lootValue and L.de_profit_disenchant or L.de_profit_vendor,
+            money(best-second))
         U.deVendorValue:SetText(vendorText .. "  /  " .. advice)
     end
 end

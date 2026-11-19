@@ -193,6 +193,8 @@ local function readCandidate(bag, slot, protectedGUID, keepTable, includeRare, i
         guid = guid, bag = bag, slot = slot, itemID = info.itemID,
         link = link, name = name, icon = icon, quality = quality, sellPrice = sellPrice,
         classID = classID, itemLevel = readable(itemLevel, "number") and itemLevel or nil,
+        auctionable = readable(info.isBound, "boolean") and not info.isBound
+            and (bindType == 0 or bindType == 2 or bindType == 3),
     }
 end
 

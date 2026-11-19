@@ -69,6 +69,13 @@ local lessons = {
     [13746]={205,2}, [13815]={210,3}, [13836]={215,3}, [13858]={220,3},
 }
 
+function G.RequiredSkill(recipeID)
+    if lessons[recipeID] then return lessons[recipeID][1] end
+    for _, entry in ipairs(G.annoraRecipes) do
+        if entry[1] == recipeID then return entry[2] end
+    end
+end
+
 function G.Lesson(id, skill, horde)
     local lesson = lessons[id]
     if not lesson then return end
@@ -116,8 +123,10 @@ function G.Stage(skill)
 end
 
 function G.Skill()
-    local skill, maximum = ns.Adapter.Skill(7421)
-    if skill then return skill, maximum end
+    if ns.Adapter.Skill then
+        local skill, maximum = ns.Adapter.Skill(7421)
+        if skill then return skill, maximum end
+    end
     return ns.db.lastEnchantingSkill, ns.db.lastEnchantingCap
 end
 

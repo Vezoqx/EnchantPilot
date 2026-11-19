@@ -23,6 +23,27 @@ local function validID(id)
     return type(id) == 'number' and id > 0 and id <= 2147483647 and id == math.floor(id)
 end
 
+local function variant(link)
+    if (issecretvalue and issecretvalue(link)) or type(link) ~= 'string' then return end
+    local payload = link:match('item:([^|]+)')
+    if not payload or #payload > 512 or not payload:match('^[%d:-]+$') then return end
+    local parts = {}
+    for field in (payload .. ':'):gmatch('(.-):') do
+        if field ~= '' and not field:match('^%-?%d+$') then return end
+        parts[#parts+1] = tonumber(field) or 0
+    end
+    if not validID(parts[1]) then return end
+    -- Fields 8 through 10 describe the link's owner and viewing context.
+    for i=8,math.min(#parts,10) do parts[i]=0 end
+    while parts[#parts] == 0 do parts[#parts]=nil end
+    return table.concat(parts, ':')
+end
+
+local function equipmentCacheKey(item)
+    local signature = item and item.auctionable and variant(item.link)
+    if signature and validID(item.itemLevel) then return 'gear:' .. item.itemLevel .. ':' .. signature end
+end
+
 function A.MarketKey()
     local version, build, _, interface = GetBuildInfo()
     if version ~= '1.60.1' or tostring(build) ~= '70959' or interface ~= 16001 then return nil end
@@ -43,6 +64,13 @@ local function marketRows(market, create)
     local rows = cache.markets[market]
     if type(rows) ~= 'table' and create then rows = {}; cache.markets[market] = rows end
     if type(rows) == 'table' then return rows end
+end
+
+function A.EquipmentPrice(item)
+    local key, market = equipmentCacheKey(item), A.MarketKey()
+    local rows = key and market and marketRows(market)
+    local row = rows and rows[key]
+    if type(row) == 'table' and row.marketKey == market then return row end
 end
 
 function A.GetPrices(itemIDs, marketKey)
@@ -86,11 +114,12 @@ end
 
 local function save(complete, offers)
     local rows = marketRows(scan.market, true)
-    local existing = rows[scan.id]
+    local cacheKey = scan.equipment and scan.equipment.key.itemID == scan.id and scan.equipment.cacheKey or scan.id
+    local existing = rows[cacheKey]
     if not complete and type(existing) == 'table' and existing.complete then return end
     local stamp = GetServerTime()
     if type(stamp) ~= 'number' or stamp <= 0 or stamp >= math.huge or stamp ~= math.floor(stamp) then return end
-    rows[scan.id] = {itemID=scan.id, itemKey=scan.key, marketKey=scan.market, source='C_AuctionHouse',
+    rows[cacheKey] = {itemID=scan.id, itemKey=scan.key, marketKey=scan.market, source='C_AuctionHouse',
         scannedAt=stamp, complete=complete, whole=scan.commodity == false, offers=offers}
     if complete and scan.report then
         local key = #offers > 0 and 'priced' or 'empty'
@@ -157,7 +186,7 @@ function A.StartSummary(onDone, automatic)
     return true
 end
 
-function A.Start(itemIDs, onDone)
+function A.Start(itemIDs, onDone, equipment)
     if scan then return false, 'auction_busy' end
     local market = A.MarketKey()
     local api = C_AuctionHouse
@@ -170,8 +199,33 @@ function A.Start(itemIDs, onDone)
     if onDone and (foreignBrowse or foreignReplicate or GetTime() - foreignAt < 3) then
         return false, 'auction_wait_external'
     end
+    local requested, gear = {}, nil
+    if equipment then
+        local cacheKey = equipmentCacheKey(equipment)
+        if not cacheKey or not ItemLocation or not api.GetItemKeyFromItem or not C_Item or not C_Item.GetItemGUID then
+            return false, 'de_item_unavailable'
+        end
+        local location = ItemLocation:CreateFromBagAndSlot(equipment.bag, equipment.slot)
+        local valid, key = pcall(function()
+            local guid = C_Item.GetItemGUID(location)
+            if (issecretvalue and issecretvalue(guid)) or guid ~= equipment.guid then return end
+            return api.GetItemKeyFromItem(location)
+        end)
+        if not valid or (issecretvalue and issecretvalue(key)) or type(key) ~= 'table' then
+            return false, 'de_item_unavailable'
+        end
+        for _, field in ipairs({'itemID','itemLevel','itemSuffix','battlePetSpeciesID'}) do
+            local value = key[field]
+            if (issecretvalue and issecretvalue(value)) or type(value) ~= 'number'
+                or value ~= math.floor(value) or math.abs(value) > 2147483647 then return false, 'de_item_unavailable' end
+        end
+        if key.itemID ~= equipment.itemID then return false, 'de_item_unavailable' end
+        gear = {key=key, cacheKey=cacheKey, signature=variant(equipment.link)}
+        requested[#requested+1] = key.itemID
+    end
+    for _, id in ipairs(type(itemIDs) == 'table' and itemIDs or {}) do requested[#requested+1] = id end
     local ids, seen = {}, {}
-    for _, id in ipairs(type(itemIDs) == 'table' and itemIDs or {}) do
+    for _, id in ipairs(requested) do
         if validID(id) and not seen[id] then
             if abandoned[id] then A.Stop('auction_pending_old'); return false, reason end
             if foreignItems[id] then
@@ -184,7 +238,7 @@ function A.Start(itemIDs, onDone)
     end
     if #ids == 0 then A.Stop('auction_choose_recipe'); return false, reason end
     generation = generation + 1
-    scan = {ids=ids, index=1, market=market, deadline=GetTime()+25, endAt=GetTime()+120}
+    scan = {ids=ids, index=1, market=market, deadline=GetTime()+25, endAt=GetTime()+120, equipment=gear}
     if onDone then scan.report = {priced=0, empty=0, total=#ids, done=onDone} end
     state, reason = 'auction_scanning', nil
     return true
@@ -280,7 +334,9 @@ local function offersFrom(api, key, commodity)
                 or row.numOwnerItems ~= math.floor(row.numOwnerItems) then return nil end
             quantity = quantity - row.numOwnerItems
             if row.containsAccountItem then quantity = 0 end
-        elseif not row.containsOwnerItem and not row.containsAccountItem then
+        elseif not row.containsOwnerItem and not row.containsAccountItem
+            and (not scan.equipment or scan.equipment.key.itemID ~= key.itemID
+                or variant(row.itemLink) == scan.equipment.signature) then
             price = row.buyoutAmount
         end
         if price ~= nil and (type(price) ~= 'number' or price < 0 or price >= math.huge or price ~= math.floor(price)) then
@@ -306,7 +362,8 @@ local function complete(api, key)
     if not offers then A.Stop('auction_partial'); return end
     local ids, index, market, endAt = scan.ids, scan.index+1, scan.market, scan.endAt
     if not ids[index] then A.Stop(); return end
-    scan = {ids=ids, index=index, market=market, deadline=GetTime()+25, endAt=endAt, report=scan.report}
+    scan = {ids=ids, index=index, market=market, deadline=GetTime()+25, endAt=endAt, report=scan.report,
+        equipment=scan.equipment}
 end
 
 local function pulseSummary(api, now)
@@ -366,10 +423,14 @@ local function pulse()
         local id = scan.ids[scan.index]
         if foreignItems[id] then A.Stop('auction_conflict'); return end
         if now - (resultAt[id] or -math.huge) < 1 or now < (scan.metadataAt or 0) then return end
-        scan.id, scan.key = id, scan.key or api.MakeItemKey(id, 0, 0, 0)
+        scan.id, scan.key = id, scan.key or (scan.equipment and scan.equipment.key.itemID == id and scan.equipment.key)
+            or api.MakeItemKey(id, 0, 0, 0)
         scan.metadataAt = now + 0.5
         local info = api.GetItemKeyInfo(scan.key)
         if not info or type(info.isCommodity) ~= 'boolean' then return end
+        if scan.equipment and scan.equipment.key.itemID == id and info.isCommodity then
+            A.Stop('de_item_unavailable'); return
+        end
         scan.commodity = info.isCommodity
         scan.awaiting = true
         send(api.SendSearchQuery, scan.key, {}, true, 0, 0)
