@@ -459,6 +459,18 @@ function Catalog.IsLearned(id)
     end
 end
 
+function Catalog.CanSkillUp(id, skill)
+    if currentProfession() and C_TradeSkillUI.GetRecipeInfo then
+        local info = C_TradeSkillUI.GetRecipeInfo(id)
+        if readable(info, "table") and readable(info.learned, "boolean") and info.learned
+            and readable(info.canSkillUp, "boolean") then return info.canSkillUp end
+    end
+    if skill ~= ns.db.lastEnchantingSkill then return end
+    for _, recipe in ipairs(cachedRows() or {}) do
+        if recipe.recipeID == id and recipe.learned then return recipe.canSkillUp end
+    end
+end
+
 function Catalog.RefreshCache()
     local ok, rows, reason = pcall(currentRows)
     if not ok then return false, "catalog_unavailable" end

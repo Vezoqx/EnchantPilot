@@ -146,6 +146,14 @@ function G.StepMaterials(step, replacement)
     return materials
 end
 
+function G.ReplacementExhausted(step, replacement, skill)
+    if not replacement or not skill or skill < step[1] or skill >= step[2] then return false end
+    local live = ns.Catalog and ns.Catalog.CanSkillUp and ns.Catalog.CanSkillUp(replacement.recipeID, skill)
+    if live == false then replacement.exhaustedAt = skill end
+    if live == true then replacement.exhaustedAt = nil end
+    return replacement.exhaustedAt ~= nil and skill >= replacement.exhaustedAt
+end
+
 function G.NextAction(skill, maximum, goal, level, learned, count, replacements)
     if not skill or skill < 1 then return "goal_no_skill" end
     if skill >= goal then return "goal_reached" end
@@ -158,6 +166,7 @@ function G.NextAction(skill, maximum, goal, level, learned, count, replacements)
     end
     local step = G.steps[G.Stage(skill)]
     local replacement = replacements and replacements[step[1]]
+    if G.ReplacementExhausted(step, replacement, skill) then return "stage_exhausted" end
     local id = replacement and replacement.recipeID or step[3]
     if #step[5] == 0 then return "goal_disenchant" end
     local known = learned(id)
@@ -194,15 +203,19 @@ function G.GoalPlan(skill, goal, maximum, scope, replacements)
         return entries, "goal_invalid"
     end
     if skill >= goal then return entries, "goal_reached" end
-    local changed
+    local changed, blocked
     for _, step in ipairs(G.steps) do
         local span = math.min(goal, step[2]) - math.max(skill, step[1])
         if span > 0 and #step[5] > 0 then
             local replacement = replacements and replacements[step[1]]
-            local materials = G.StepMaterials(step,replacement)
             changed = changed or replacement ~= nil
-            entries[#entries+1] = {count=math.ceil(step[4] * span / (step[2]-step[1])), materials=materials}
+            if G.ReplacementExhausted(step, replacement, skill) then
+                blocked = step[1]
+            else
+                entries[#entries+1] = {count=math.ceil(step[4] * span / (step[2]-step[1])),
+                    materials=G.StepMaterials(step,replacement)}
+            end
         end
     end
-    return entries, #entries == 0 and "goal_disenchant" or nil, goal, changed
+    return entries, #entries == 0 and not blocked and "goal_disenchant" or nil, goal, changed, blocked
 end

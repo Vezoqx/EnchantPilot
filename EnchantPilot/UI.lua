@@ -57,12 +57,12 @@ end
 local function estimatedCost(quote, section, summary)
     if not quote or quote.issue then return end
     local result = quote[section]
-    if not result.issue and not quote.stale then return result.total end
+    if not result.issue and not quote.stale then return result.total, false, quote.scannedAt end
     if summary then
         local total = ns.PriceModel.SummaryBuyEstimate(quote.shopping, summary.prices, section == "full")
-        if total then return total, true end
+        if total then return total, true, summary.scannedAt end
     end
-    if not result.issue then return result.total, true end
+    if not result.issue then return result.total, true, quote.scannedAt end
 end
 
 local function singleCraft(recipe)
@@ -265,7 +265,8 @@ local function setTab(key)
         if name == key then panel:Show() else panel:Hide() end
         if U.tabs[name] then
             local selected = name == key or (key == "targets" and name == "enchant")
-                or ((key == "budget" or key == "annora" or key == "goal") and name == "leveling")
+                or ((key == "budget" or key == "annora" or key == "goal" or key == "replacements") and name == "leveling")
+                or (key == "savings" and name == "prices")
             U.tabs[name].background:SetColorTexture(unpackValues(selected and C.selected or C.button))
             U.tabs[name].label:SetTextColor(unpackValues(selected and C.teal or C.muted))
         end
@@ -273,6 +274,7 @@ local function setTab(key)
     if key == "recipes" then U.RenderRecipes()
     elseif key == "plan" then U.RenderPlan()
     elseif key == "budget" then U.RenderBudget()
+    elseif key == "replacements" then U.RenderReplacements()
     elseif key == "annora" then U.RenderAnnora()
     elseif key == "goal" then U.RenderGoal()
     elseif key == "history" then U.RenderHistory()
@@ -656,16 +658,18 @@ local function searchAuction(query)
     return true
 end
 
+local function openAlternatives(step)
+    U.budgetStep, U.budgetStage, U.budgetList.page = step, step[3], 1
+    setTab("budget")
+end
+
 local function createGuide(panel)
     local guide = {}
     U.guide = guide
     text(panel, 0, 0, 168, 23, L.route_title, 14, C.teal, true)
     button(panel, 173, 0, 82, 25, L.goal_button, function() setTab("goal") end)
     button(panel, 260, 0, 144, 25, L.stage_alternative, function()
-        U.budgetStep = ns.Leveling.steps[U.guidePage]
-        U.budgetStage = U.budgetStep[3]
-        U.budgetList.page = 1
-        setTab("budget")
+        openAlternatives(ns.Leveling.steps[U.guidePage])
     end)
     guide.stage = text(panel, 0, 35, 404, 19, "", 13, {0.70, 0.81, 1, 1}, true)
     guide.name = text(panel, 0, 61, 404, 19, "", 14, C.amber, true)
@@ -712,7 +716,8 @@ local function createGuide(panel)
         table.insert(ns.db.shoppingPlan, entry)
         U.planPage=math.ceil(#ns.db.shoppingPlan/8); setTab("plan")
     end, true)
-    text(panel, 0, 335, 280, 20, L.route_trainers, 13, C.teal)
+    text(panel, 0, 335, 137, 20, L.route_trainers_short, 13, C.teal)
+    button(panel, 145, 332, 132, 25, L.stage_saved_list, function() setTab("replacements") end)
     button(panel, 282, 332, 122, 25, L.trainer_catalog, function() setTab("annora") end)
     guide.trainers = {}
     for rank=1,3 do
@@ -720,6 +725,9 @@ local function createGuide(panel)
         tooltip(guide.trainers[rank])
     end
     guide.action = text(panel, 0, 457, 365, 31, "", 11, C.teal)
+    guide.fix = button(panel, 276, 457, 128, 26, L.stage_alternative, function()
+        openAlternatives(ns.Leveling.steps[ns.Leveling.Stage(ns.Leveling.Skill())])
+    end)
     guide.actionPin = button(panel, 376, 457, 28, 26, "", markTrainer)
     local actionIcon = guide.actionPin:CreateTexture(nil, "ARTWORK")
     actionIcon:SetPoint("CENTER")
@@ -737,6 +745,7 @@ function U.RenderGuide()
     local horde = UnitFactionGroup and UnitFactionGroup("player") == "Horde"
     local vendor = step[6] and step[6][(ru and 0 or 2)+(horde and 2 or 1)]
     local skill, maximum = ns.Leveling.Skill()
+    local exhausted = ns.Leveling.ReplacementExhausted(step, replacement, skill)
     local crafts = ns.Leveling.Crafts(step, skill)
     guide.crafts, guide.items = crafts, {}
     guide.stage:SetText(string.format(L.route_stage, step[1], step[2], crafts))
@@ -754,7 +763,7 @@ function U.RenderGuide()
         guide.pin.tooltip = string.format(L.route_pin_hint, trainerName, trainer[2], trainer[3], requiredSkill, requiredLevel)
         guide.pin:Show()
     else
-        guide.source:SetText(replacement and L.stage_saved_estimate
+        guide.source:SetText(exhausted and L.stage_exhausted or replacement and L.stage_saved_estimate
             or vendor and string.format(L.route_vendor, vendor) or (step[1] == 1 and L.route_first_rod or ""))
         guide.source:SetTextColor(unpackValues(C.amber))
         guide.pin:Hide()
@@ -777,7 +786,7 @@ function U.RenderGuide()
             row:Show()
         else row:Hide() end
     end
-    enabled(guide.add, #guide.items>0)
+    enabled(guide.add, #guide.items>0 and not exhausted)
     enabled(guide.previous, U.guidePage>1)
     enabled(guide.next, U.guidePage<#ns.Leveling.steps)
     for rank, control in ipairs(guide.trainers) do
@@ -815,6 +824,8 @@ function U.RenderGuide()
         detail = string.format(detail, first, reagentName({itemID=second,name="#" .. second}))
     end
     guide.action:SetText(string.format(L.next_action, detail))
+    guide.action:SetWidth(action == "stage_exhausted" and 268 or 365)
+    if action == "stage_exhausted" then guide.fix:Show() else guide.fix:Hide() end
     guide.actionPin.trainer = destination
     if destination then
         guide.actionPin.tooltip = string.format(L.next_pin, destination[ru and 4 or 5])
@@ -888,7 +899,12 @@ local function createPrices(panel)
     U.priceTotalBar:EnableMouse(true)
     fill(U.priceTotalBar, 0, 0, 404, 25, C.card)
     U.priceTotals = text(U.priceTotalBar, 7, 0, 390, 13, "", 11, C.text, true)
-    U.priceSavings = text(U.priceTotalBar, 7, 12, 390, 13, "", 10, C.teal, true)
+    U.priceSavings = text(U.priceTotalBar, 7, 12, 267, 13, "", 10, C.teal, true)
+    U.savingsWhy = button(U.priceTotalBar, 278, 3, 120, 19, L.stage_why, function()
+        if ns.combinedPlan and ns.combinedPlan.blocked then
+            openAlternatives(ns.Leveling.steps[ns.Leveling.Stage(ns.Leveling.Skill())])
+        else setTab("savings") end
+    end)
     tooltip(U.priceTotalBar)
 end
 
@@ -910,6 +926,13 @@ function U.RenderPrices()
         or (not status.open and L.auction_open_first or translated(status.state))) or "")
     U.priceTotals:SetText(quote and quote.issue and translated(quote.issue) or "")
     U.priceSavings:SetText("")
+    U.savingsWhy:Hide()
+    if selection and selection.blocked then
+        U.priceTotals:SetText(L.stage_partial)
+        U.priceSavings:SetText(L.stage_exhausted)
+        U.savingsWhy:SetText(L.stage_alternative)
+        U.savingsWhy:Show()
+    end
     local summary = auctionSummary()
     local summaryFresh = renderAuctionSummary(summary)
     U.formulaCost:SetText("")
@@ -930,7 +953,8 @@ function U.RenderPrices()
     end
     local details = {}
     U.priceTotalBar.tooltip = nil
-    U.shoppingText:SetText(quote and quote.issue and translated(quote.issue)
+    U.shoppingText:SetText(selection and selection.blocked and L.stage_exhausted
+        or quote and quote.issue and translated(quote.issue)
         or (selection and #selection.materials == 0 and L.recipeMaterialsUnknown or L.auction_choose_recipe))
     local materials = {}
     U.missingQueries = {}
@@ -970,10 +994,21 @@ function U.RenderPrices()
         if estimate then total = money(estimate) end
     end
     U.priceTotals:SetText(string.format(summaryFresh and L.auction_totals or L.auction_approximate_total, total))
-    if selection.original then
+    if selection.blocked then
+        U.priceTotals:SetText(L.stage_partial)
+        U.priceSavings:SetText(L.stage_exhausted)
+    elseif selection.original then
         local original = ns.QuoteMaterials(selection.original, 1, 0)
-        local before = estimatedCost(original, "buy", summary)
-        local after = estimatedCost(quote, "buy", summary)
+        local before, beforeApprox, beforeStamp = estimatedCost(original, "buy", summary)
+        local after, afterApprox, afterStamp = estimatedCost(quote, "buy", summary)
+        local function describe(value, approximate, stamp)
+            return (value and ((approximate and "~" or "") .. money(value)) or L.budget_no_price)
+                .. (stamp and ("  /  " .. date("%d.%m.%Y %H:%M", stamp)) or "")
+        end
+        U.savingsDetail:SetText(string.format(L.stage_why_detail,
+            describe(before, beforeApprox, beforeStamp), describe(after, afterApprox, afterStamp)))
+        U.savingsWhy:SetText(L.stage_why)
+        U.savingsWhy:Show()
         if before and after then
             local delta = before-after
             U.priceSavings:SetText(string.format(delta < 0 and L.stage_extra_cost or L.stage_savings, money(math.abs(delta))))
@@ -1210,12 +1245,12 @@ end
 function U.RenderTracker()
     local tracker = U.tracker
     if not tracker or not tracker:IsShown() then return end
-    local materials, issue, _, limit = ns.GoalMaterials(tracker.scope)
+    local materials, issue, _, limit, _, blocked = ns.GoalMaterials(tracker.scope)
     local first, last, pages
     tracker.page, first, last, pages = pageRange(tracker.page, #tracker.rows, #materials)
     tracker.title:SetText(tracker.scope == "trainer" and not limit and L.goal_trainer
         or string.format(L.goal_title, limit or ns.db.levelingGoal))
-    tracker.summary:SetText(issue and translated(issue) or string.format(L.page, first, last, #materials))
+    tracker.summary:SetText(blocked and L.stage_exhausted or issue and translated(issue) or string.format(L.page, first, last, #materials))
     enabled(tracker.prev, tracker.page > 1)
     enabled(tracker.next, tracker.page < pages)
     local visible = first > 0 and last-first+1 or 0
@@ -1242,14 +1277,14 @@ function U.RenderTracker()
 end
 
 function U.RenderGoal()
-    local materials, issue, maximum = ns.GoalMaterials()
-    local trainerMaterials, trainerIssue, _, limit = ns.GoalMaterials("trainer")
-    U.goalStatus:SetText(issue and translated(issue) or
+    local materials, issue, maximum, _, _, blocked = ns.GoalMaterials()
+    local trainerMaterials, trainerIssue, _, limit, _, trainerBlocked = ns.GoalMaterials("trainer")
+    U.goalStatus:SetText(blocked and L.stage_exhausted or issue and translated(issue) or
         (maximum and maximum < ns.db.levelingGoal and string.format(L.goal_rank, maximum) or L.goal_estimate))
-    enabled(U.goalPrices, #materials > 0)
-    U.goalTrainerStatus:SetText(trainerIssue and translated(trainerIssue) or string.format(L.goal_trainer_limit, limit))
+    enabled(U.goalPrices, #materials > 0 or blocked ~= nil)
+    U.goalTrainerStatus:SetText(trainerBlocked and L.stage_exhausted or trainerIssue and translated(trainerIssue) or string.format(L.goal_trainer_limit, limit))
     enabled(U.goalTrainerPrices, #trainerMaterials > 0 or limit ~= nil)
-    enabled(U.goalTracker, #materials > 0 or #trainerMaterials > 0 or U.tracker:IsShown())
+    enabled(U.goalTracker, #materials > 0 or #trainerMaterials > 0 or blocked ~= nil or U.tracker:IsShown())
 end
 
 local function createGoal(panel)
@@ -1359,13 +1394,13 @@ function U.RenderAnnora()
     list.note:SetText(string.format(L.annora_progress, skill or "?", maximum or "?"))
 end
 
-local function saveReplacement(replacement)
-    ns.db.routeReplacements[U.budgetStep[1]] = replacement
+local function saveReplacement(step, replacement, tab)
+    ns.db.routeReplacements[step[1]] = replacement
     local scope = (ns.combinedPlan and ns.combinedPlan.goal) or U.tracker.scope or "goal"
     ns.RebuildShoppingPlan(true, scope)
     U.shoppingPage, U.reagentIndex = 1, nil
     U.RenderTracker()
-    setTab("prices")
+    setTab(tab or "prices")
 end
 
 function U.RenderBudget()
@@ -1384,6 +1419,7 @@ function U.RenderBudget()
     end
     list.title:SetText(stage and L.stage_alternative or L.budget_title)
     local saved = U.budgetStep and ns.db.routeReplacements[U.budgetStep[1]]
+    local exhausted = saved and ns.Leveling.ReplacementExhausted(U.budgetStep, saved, ns.Leveling.Skill())
     if saved then list.reset:Show() else list.reset:Hide() end
     list.note:SetWidth(saved and 141 or 290)
     list.hint:SetText(saved and string.format(L.stage_current, saved.name) or stage and string.format(L.stage_compare,
@@ -1394,7 +1430,7 @@ function U.RenderBudget()
         if not staleSkill and recipe.learned and recipe.canSkillUp and recipe.recipeID ~= stage then
             local quote = singleCraft(recipe)
             local cost, approximate = estimatedCost(quote, "buy", summary)
-            if not stage or known ~= true or baseline == nil or (cost ~= nil and cost < baseline) then
+            if exhausted or not stage or known ~= true or baseline == nil or (cost ~= nil and cost < baseline) then
                 local full, fullApprox = estimatedCost(quote, "full", summary)
                 entries[#entries+1] = {recipe=recipe, cost=cost, approximate=approximate, full=full, fullApprox=fullApprox}
             end
@@ -1424,10 +1460,33 @@ function U.RenderBudget()
             local materials = U.budgetStep and #U.budgetStep[5] > 0 and ns.Adapter.RecipeReagents(entry.recipe.recipeID)
             if materials and #materials > 0 then
                 row.replace.pick = function()
-                    saveReplacement({recipeID=entry.recipe.recipeID, name=entry.recipe.name, materials=materials})
+                    saveReplacement(U.budgetStep, {recipeID=entry.recipe.recipeID, name=entry.recipe.name, materials=materials})
                 end
                 row.replace:Show()
             end
+        end
+    end
+end
+
+function U.RenderReplacements()
+    local entries = {}
+    local list = U.replacementsList
+    for _, step in ipairs(ns.Leveling.steps) do
+        if ns.db.routeReplacements[step[1]] then entries[#entries+1] = step end
+    end
+    list.hint:SetText(#entries == 0 and L.stage_saved_empty or L.stage_saved_hint)
+    listPage(list, entries)
+    local skill = ns.Leveling.Skill()
+    for _, row in ipairs(list.rows) do
+        local step = row.entry
+        if step then
+            local replacement = ns.db.routeReplacements[step[1]]
+            row.name:SetText(replacement.name)
+            local detail = string.format(L.stage_saved_range, step[1], step[2])
+            if ns.Leveling.ReplacementExhausted(step, replacement, skill) then detail = detail .. " / " .. L.stage_exhausted end
+            row.detail:SetText(detail)
+            row.pick = function() openAlternatives(step) end
+            row.reset.pick = function() saveReplacement(step, nil, "replacements") end
         end
     end
 end
@@ -1550,13 +1609,22 @@ function U.Create()
     createInventory(U.panels.disenchant)
     createPrices(U.panels.prices)
     createGuide(U.panels.leveling)
-    for _, key in ipairs({"plan", "budget", "history", "annora", "goal"}) do
+    for _, key in ipairs({"plan", "budget", "history", "annora", "goal", "replacements", "savings"}) do
         local panel = CreateFrame("Frame", nil, frame)
         panel:SetPoint("TOPLEFT", frame, "TOPLEFT", 18, -102)
         panel:SetSize(404, 500)
         U.panels[key] = panel
     end
     createGoal(U.panels.goal)
+    text(U.panels.savings, 0, 0, 404, 25, L.stage_why, 16, C.teal)
+    U.savingsDetail = text(U.panels.savings, 0, 36, 404, 190, "", 13, C.text)
+    U.savingsDetail:SetJustifyV("TOP")
+    button(U.panels.savings, 0, 465, 106, 29, L.previous, function() setTab("prices") end)
+    local swaps = createList(U.panels.replacements, L.stage_saved_list, "", "replacementsList", U.RenderReplacements, "leveling")
+    for _, row in ipairs(swaps.rows) do
+        row.name:SetWidth(244)
+        row.reset = button(row, 258, 5, 138, 15, L.stage_reset, function(self) if self.pick then self.pick() end end)
+    end
     local plan = createList(U.panels.plan, L.plan_title, L.plan_hint, "planList", U.RenderPlan, "prices")
     button(U.panels.plan, 112, 465, 132, 29, L.plan_add, function()
         U.pickingPlan, U.recipeMode, U.recipePage = true, "all", 1
@@ -1606,7 +1674,7 @@ function U.Create()
     end)
     annora.note = text(U.panels.annora, 115, 470, 289, 25, "", 11, C.muted)
     budget.note = text(U.panels.budget, 112, 468, 290, 22, "", 10, C.amber)
-    budget.reset = button(U.panels.budget, 260, 465, 144, 29, L.stage_reset, function() saveReplacement(nil) end)
+    budget.reset = button(U.panels.budget, 260, 465, 144, 29, L.stage_reset, function() saveReplacement(U.budgetStep) end)
     for _, row in ipairs(budget.rows) do
         row.replace = button(row, 310, 5, 88, 15, L.stage_replace, function(self) if self.pick then self.pick() end end)
     end

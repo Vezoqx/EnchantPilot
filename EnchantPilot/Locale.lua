@@ -1,5 +1,5 @@
 local _, ns = ...
-ns.VERSION = '0.2.57-beta'
+ns.VERSION = '0.2.58-beta'
 local en = {
     prices='Prices', auction_scan='Reagent prices',
     auction_approximate_total='Approximate cost: %s',
@@ -216,7 +216,7 @@ local ru = {
     plan_clamped='Количество уменьшено до доступного по реагентам, с учётом запаса.',
     not_enchanting='Открой собственное наложение чар.', catalog_unavailable='Каталог рецептов недоступен.', recipe_data_pending='Ожидаем данные о рецептах.',
     recipe_select_failed='Игра не смогла выбрать рецепт.', keep_data_unavailable='Не удалось прочитать метки «Сохранить».',
-    subtitle='Удобный ритм прокачки зачарования', beta='0.2.57-бета / Forever 1.60.1',
+    subtitle='Удобный ритм прокачки зачарования', beta='0.2.58-бета / Forever 1.60.1',
     prices='Цены', auction_scan='Цены реагентов',
     auction_approximate_total='Приблизительная стоимость: %s',
     auction_auto_started='Сканирую весь аукцион. Пока он открыт, скан повторяется каждые 15 минут.',
@@ -487,6 +487,18 @@ local extra = {
     budget_short={"Leveling", "Прокачка"}, budget_title={"Budget leveling", "Бюджетная прокачка"},
     budget_hint={"Learned recipes that can raise skill. Cost to buy missing reagents for one craft.", "Изученные рецепты, которые могут дать навык. Стоимость докупки на одно изготовление."},
     stage_replace={"Replace", "Заменить"},
+    stage_exhausted={"Replacement no longer grants skill", "Замена больше не даёт навык"},
+    stage_partial={"Partial list. Choose another recipe.", "Список неполный. Выберите другой рецепт."},
+    stage_why={"Why this amount?", "Почему столько?"},
+    stage_why_detail={
+        "Original route: %s\n\nRoute with replacements: %s\n\nBoth costs account for bags and bank. Dates show the oldest price used. ~ marks an estimate or an older price.",
+        "Исходный маршрут: %s\n\nМаршрут с заменами: %s\n\nОбе суммы учитывают сумки и банк. Даты показывают самую раннюю из использованных цен. ~ обозначает оценку или устаревшую цену.",
+    },
+    stage_saved_list={"Saved replacements", "Сохранённые замены"},
+    stage_saved_empty={"No saved replacements.", "Сохранённых замен пока нет."},
+    stage_saved_hint={"Click a recipe to see alternatives for its stage.", "Нажмите на рецепт, чтобы увидеть замены для этапа."},
+    stage_saved_range={"Skill %d–%d", "Навык %d–%d"},
+    route_trainers_short={"Trainers", "Учителя"},
     stage_reset={"Restore original", "Вернуть исходный"},
     stage_current={"Saved replacement: %s", "Замена в маршруте: %s"},
     stage_saved_estimate={"Saved replacement. Attempts are estimated.", "Замена сохранена. Число попыток примерное."},

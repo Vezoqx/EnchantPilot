@@ -155,23 +155,23 @@ end
 function ns.GoalMaterials(scope, original)
     local skill, maximum = ns.Leveling.Skill()
     local replacements = not original and ns.db.routeReplacements or nil
-    local plan, issue, limit, changed = ns.Leveling.GoalPlan(skill, ns.db.levelingGoal, maximum, scope, replacements)
+    local plan, issue, limit, changed, blocked = ns.Leveling.GoalPlan(skill, ns.db.levelingGoal, maximum, scope, replacements)
     local materials = ns.PriceModel.CombineRecipes(plan, A.ReagentCount)
     local bank = ns.db.personalBank
     if type(bank) == 'table' and type(bank.counts) == 'table' then
         for _, row in ipairs(materials) do row.bank = bank.counts[row.itemID] or 0 end
     end
-    return materials, issue, maximum, limit, changed
+    return materials, issue, maximum, limit, changed, blocked
 end
 
 function ns.RebuildShoppingPlan(active, goal)
     if active and goal then
-        local materials, issue, _, limit, changed = ns.GoalMaterials(goal)
+        local materials, issue, _, limit, changed, blocked = ns.GoalMaterials(goal)
         local name = goal == 'trainer'
             and (limit and string.format(ns.L.goal_trainer_title, limit) or ns.L.goal_trainer)
             or string.format(ns.L.goal_title, ns.db.levelingGoal)
         ns.combinedPlan = {name=name, materials=materials, limit=limit,
-            original=changed and ns.GoalMaterials(goal, true) or nil,
+            original=changed and ns.GoalMaterials(goal, true) or nil, blocked=blocked,
             issue=issue, shoppingOnly=true, goal=goal}
         return ns.combinedPlan
     end
@@ -692,6 +692,15 @@ function ns.OnEvent(event,...)
         ns.inventoryDirty=true
     end
     ns.Refresh()
+    if next(ns.db.routeReplacements) and (event=='SKILL_LINES_CHANGED' or event=='TRADE_SKILL_LIST_UPDATE'
+        or event=='TRADE_SKILL_SHOW') then
+        local skill = ns.Leveling.Skill()
+        local step = ns.Leveling.steps[ns.Leveling.Stage(skill)]
+        ns.Leveling.ReplacementExhausted(step, ns.db.routeReplacements[step[1]], skill)
+        if ns.UI.activeTab == 'replacements' then ns.UI.RenderReplacements() end
+        if ns.UI.activeTab == 'goal' then ns.UI.RenderGoal() end
+        if ns.UI.activeTab == 'budget' then ns.UI.RenderBudget() end
+    end
     if ns.UI.activeTab == 'leveling' and (event=='GET_ITEM_INFO_RECEIVED' or event=='BAG_UPDATE_DELAYED'
         or event=='SKILL_LINES_CHANGED' or event=='TRAINER_SHOW' or event=='TRAINER_UPDATE'
         or event=='TRAINER_CLOSED' or event=='PLAYER_LEVEL_UP' or event=='NEW_RECIPE_LEARNED'
