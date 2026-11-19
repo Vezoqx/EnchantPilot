@@ -1,5 +1,5 @@
 local _, ns = ...
-ns.VERSION = '0.2.53-beta'
+ns.VERSION = '0.2.54-beta'
 local en = {
     prices='Prices', auction_scan='Reagent prices',
     auction_approximate_total='Approximate cost: %s',
@@ -216,7 +216,7 @@ local ru = {
     plan_clamped='Количество уменьшено до доступного по реагентам, с учётом запаса.',
     not_enchanting='Открой собственное наложение чар.', catalog_unavailable='Каталог рецептов недоступен.', recipe_data_pending='Ожидаем данные о рецептах.',
     recipe_select_failed='Игра не смогла выбрать рецепт.', keep_data_unavailable='Не удалось прочитать метки «Сохранить».',
-    subtitle='Удобный ритм прокачки зачарования', beta='0.2.53-бета / Forever 1.60.1',
+    subtitle='Удобный ритм прокачки зачарования', beta='0.2.54-бета / Forever 1.60.1',
     prices='Цены', auction_scan='Цены реагентов',
     auction_approximate_total='Приблизительная стоимость: %s',
     auction_auto_started='Сканирую весь аукцион. Пока он открыт, скан повторяется каждые 15 минут.',
@@ -420,6 +420,12 @@ local ru = {
     loaded='Загружен. Открой наложение чар и введи /ep.', sessionChanged='Настройки применятся при фиксации новой серии.',
 }
 local extra = {
+    goal_trainer={"To the next trainer", "До следующего учителя"},
+    goal_to_target={"To the skill goal", "До целевого навыка"},
+    goal_trainer_limit={"Current rank cap: %d", "Текущий предел навыка: %d"},
+    goal_no_next_trainer={"You already have the highest rank.", "У вас уже высший ранг профессии."},
+    goal_unknown_rank={"Open Enchanting to read your current rank.", "Откройте Наложение чар, чтобы узнать текущий ранг."},
+    goal_trainer_reached={"Rank cap reached. Visit the next trainer.", "Предел ранга достигнут. Пора к следующему учителю."},
     stage_alternative={"Stage alternatives", "Замена этапа"},
     stage_compare={"Stage: %s\nMissing materials for one attempt: %s", "Этап: %s\nДокупка на одну попытку: %s"},
     stage_costs={"Per attempt: %s  /  To buy: %s", "За попытку: %s  /  Докупить: %s"},

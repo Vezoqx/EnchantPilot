@@ -138,7 +138,7 @@ end
 
 function ns.ScanPrices()
     refreshPriceSelection()
-    if ns.combinedPlan and ns.combinedPlan.goal then ns.RebuildShoppingPlan(true, true) end
+    if ns.combinedPlan and ns.combinedPlan.goal then ns.RebuildShoppingPlan(true, ns.combinedPlan.goal) end
     local ids = priceItemIDs(ns.combinedPlan or ns.priceSelection)
     local formula = ns.priceSelection and ns.priceSelection.learned == false and ns.Catalog
         and ns.Catalog.FormulaItemID(ns.priceSelection.recipeID)
@@ -148,17 +148,18 @@ function ns.ScanPrices()
     return ok, why
 end
 
-function ns.GoalMaterials()
+function ns.GoalMaterials(scope)
     local skill, maximum = ns.Leveling.Skill()
-    local plan, issue = ns.Leveling.GoalPlan(skill, ns.db.levelingGoal)
-    return ns.PriceModel.CombineRecipes(plan, A.ReagentCount), issue, maximum
+    local plan, issue, limit = ns.Leveling.GoalPlan(skill, ns.db.levelingGoal, maximum, scope)
+    return ns.PriceModel.CombineRecipes(plan, A.ReagentCount), issue, maximum, limit
 end
 
 function ns.RebuildShoppingPlan(active, goal)
     if active and goal then
-        local materials, issue = ns.GoalMaterials()
-        ns.combinedPlan = {name=string.format(ns.L.goal_title, ns.db.levelingGoal), materials=materials,
-            issue=issue, shoppingOnly=true, goal=true}
+        local materials, issue, _, limit = ns.GoalMaterials(goal)
+        local name = goal == 'trainer' and ns.L.goal_trainer or string.format(ns.L.goal_title, ns.db.levelingGoal)
+        ns.combinedPlan = {name=name, materials=materials, limit=limit,
+            issue=issue, shoppingOnly=true, goal=goal}
         return ns.combinedPlan
     end
     local plan = ns.db.shoppingPlan

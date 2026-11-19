@@ -902,7 +902,11 @@ function U.RenderPrices()
         U.formulaCost:SetText(string.format(L.formula_and_craft,
             formulaPrice and ((formulaEstimate and "~" or "") .. money(formulaPrice)) or "?",
             craftPrice and ((craftEstimate and "~" or "") .. money(craftPrice)) or "?"))
-    elseif ns.combinedPlan then U.formulaCost:SetText(ns.combinedPlan.goal and L.goal_estimate or L.plan_stock_once) end
+    elseif ns.combinedPlan then
+        U.formulaCost:SetText(ns.combinedPlan.goal == "trainer" and ns.combinedPlan.limit
+            and string.format(L.goal_trainer_limit, ns.combinedPlan.limit)
+            or ns.combinedPlan.goal and L.goal_estimate or L.plan_stock_once)
+    end
     local details = {}
     U.priceTotalBar.tooltip = nil
     U.shoppingText:SetText(quote and quote.issue and translated(quote.issue)
@@ -1167,10 +1171,11 @@ end
 function U.RenderTracker()
     local tracker = U.tracker
     if not tracker or not tracker:IsShown() then return end
-    local materials, issue = ns.GoalMaterials()
+    local materials, issue, _, limit = ns.GoalMaterials(tracker.scope)
     local first, last, pages
     tracker.page, first, last, pages = pageRange(tracker.page, #tracker.rows, #materials)
-    tracker.title:SetText(string.format(L.goal_title, ns.db.levelingGoal))
+    tracker.title:SetText(tracker.scope == "trainer" and not limit and L.goal_trainer
+        or string.format(L.goal_title, limit or ns.db.levelingGoal))
     tracker.summary:SetText(issue and translated(issue) or string.format(L.page, first, last, #materials))
     enabled(tracker.prev, tracker.page > 1)
     enabled(tracker.next, tracker.page < pages)
@@ -1194,27 +1199,35 @@ end
 
 function U.RenderGoal()
     local materials, issue, maximum = ns.GoalMaterials()
+    local trainerMaterials, trainerIssue, _, limit = ns.GoalMaterials("trainer")
     U.goalStatus:SetText(issue and translated(issue) or
         (maximum and maximum < ns.db.levelingGoal and string.format(L.goal_rank, maximum) or L.goal_estimate))
     enabled(U.goalPrices, #materials > 0)
-    enabled(U.goalTracker, #materials > 0 or U.tracker:IsShown())
+    U.goalTrainerStatus:SetText(trainerIssue and translated(trainerIssue) or string.format(L.goal_trainer_limit, limit))
+    enabled(U.goalTrainerPrices, #trainerMaterials > 0 or limit ~= nil)
+    enabled(U.goalTracker, #materials > 0 or #trainerMaterials > 0 or U.tracker:IsShown())
 end
 
 local function createGoal(panel)
     text(panel, 0, 0, 404, 25, L.goal_button, 16, C.teal)
     text(panel, 0, 35, 404, 48, L.goal_hint, 11, C.muted)
     input(panel, 0, 90, 200, L.goal_skill, L.goal_setting, L.goal_hint, function()
-        if ns.combinedPlan and ns.combinedPlan.goal then ns.RebuildShoppingPlan(true, true) end
+        if ns.combinedPlan and ns.combinedPlan.goal == "goal" then ns.RebuildShoppingPlan(true, "goal") end
         U.RenderGoal()
         U.RenderTracker()
     end, 300)
     U.goalStatus = text(panel, 0, 145, 404, 45, "", 12, C.amber)
-    U.goalPrices = button(panel, 0, 201, 195, 29, L.plan_view, function()
-        ns.RebuildShoppingPlan(true, true)
+    local function showPrices(scope)
+        ns.RebuildShoppingPlan(true, scope)
+        U.tracker.scope, U.tracker.page = scope, 1
+        U.RenderTracker()
         U.reagentIndex, U.shoppingPage = 0, 1
         setTab("prices")
-    end, true)
-    U.goalTracker = button(panel, 205, 201, 199, 29, L.tracker_toggle, function()
+    end
+    U.goalTrainerPrices = button(panel, 0, 201, 195, 29, L.goal_trainer, function() showPrices("trainer") end)
+    U.goalPrices = button(panel, 205, 201, 199, 29, L.goal_to_target, function() showPrices("goal") end, true)
+    U.goalTrainerStatus = text(panel, 0, 241, 404, 35, "", 11, C.muted)
+    U.goalTracker = button(panel, 0, 285, 199, 29, L.tracker_toggle, function()
         if U.tracker:IsShown() then U.tracker:Hide()
         else U.tracker.page=1; U.tracker:Show(); U.RenderTracker() end
         U.RenderGoal()
@@ -1500,7 +1513,7 @@ function U.Create()
             if not row.entry then return end
             row.entry.count = math.min(500, math.max(1, tonumber(self:GetText()) or 1))
             self:SetText(tostring(row.entry.count))
-            if ns.combinedPlan then ns.RebuildShoppingPlan(true) end
+            if ns.combinedPlan and not ns.combinedPlan.goal then ns.RebuildShoppingPlan(true) end
         end)
         count:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
         count:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
@@ -1508,7 +1521,7 @@ function U.Create()
             for i, entry in ipairs(ns.db.shoppingPlan) do
                 if entry == row.entry then table.remove(ns.db.shoppingPlan, i); break end
             end
-            if ns.combinedPlan then ns.RebuildShoppingPlan(true) end
+            if ns.combinedPlan and not ns.combinedPlan.goal then ns.RebuildShoppingPlan(true) end
             U.RenderPlan()
         end)
     end

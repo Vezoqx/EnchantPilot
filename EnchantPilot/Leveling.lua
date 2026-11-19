@@ -157,8 +157,18 @@ function G.NextAction(skill, maximum, goal, level, learned, count)
     return "next_buy", missingCount, missingID
 end
 
-function G.GoalPlan(skill, goal)
+function G.GoalPlan(skill, goal, maximum, scope)
     local entries = {}
+    if scope == "trainer" then
+        if maximum == 300 then return entries, "goal_no_next_trainer" end
+        if maximum ~= 75 and maximum ~= 150 and maximum ~= 225 then
+            return entries, "goal_unknown_rank"
+        end
+        goal = maximum
+        if type(skill) == "number" and skill >= maximum then
+            return entries, "goal_trainer_reached", goal
+        end
+    end
     if type(skill) ~= "number" or skill < 1 then return entries, "goal_no_skill" end
     if type(goal) ~= "number" or goal < 1 or goal > 300 or goal ~= math.floor(goal) then
         return entries, "goal_invalid"
@@ -175,5 +185,5 @@ function G.GoalPlan(skill, goal)
             entries[#entries+1] = {count=math.ceil(step[4] * span / (step[2]-step[1])), materials=materials}
         end
     end
-    return entries, #entries == 0 and "goal_disenchant" or nil
+    return entries, #entries == 0 and "goal_disenchant" or nil, goal
 end
