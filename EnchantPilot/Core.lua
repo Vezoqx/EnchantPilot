@@ -138,6 +138,7 @@ end
 
 function ns.ScanPrices()
     refreshPriceSelection()
+    if ns.combinedPlan and ns.combinedPlan.goal then ns.RebuildShoppingPlan(true, true) end
     local ids = priceItemIDs(ns.combinedPlan or ns.priceSelection)
     local formula = ns.priceSelection and ns.priceSelection.learned == false and ns.Catalog
         and ns.Catalog.FormulaItemID(ns.priceSelection.recipeID)
@@ -147,7 +148,19 @@ function ns.ScanPrices()
     return ok, why
 end
 
-function ns.RebuildShoppingPlan(active)
+function ns.GoalMaterials()
+    local skill, maximum = ns.Leveling.Skill()
+    local plan, issue = ns.Leveling.GoalPlan(skill, ns.db.levelingGoal)
+    return ns.PriceModel.CombineRecipes(plan, A.ReagentCount), issue, maximum
+end
+
+function ns.RebuildShoppingPlan(active, goal)
+    if active and goal then
+        local materials, issue = ns.GoalMaterials()
+        ns.combinedPlan = {name=string.format(ns.L.goal_title, ns.db.levelingGoal), materials=materials,
+            issue=issue, shoppingOnly=true, goal=true}
+        return ns.combinedPlan
+    end
     local plan = ns.db.shoppingPlan
     local materials = ns.PriceModel.CombineRecipes(plan, A.ReagentCount)
     ns.combinedPlan = active and materials and #materials > 0
@@ -197,7 +210,9 @@ end
 
 function ns.GetPriceQuote(settings)
     if ns.combinedPlan then
-        ns.RebuildShoppingPlan(true)
+        ns.RebuildShoppingPlan(true, ns.combinedPlan.goal)
+        if ns.combinedPlan and ns.combinedPlan.issue then return {issue=ns.combinedPlan.issue} end
+        if not ns.combinedPlan then return end
         return ns.QuoteMaterials(ns.combinedPlan.materials, 1, 0)
     end
     local selection=ns.priceSelection
@@ -659,6 +674,8 @@ function ns.OnEvent(event,...)
         or event=='TRAINER_CLOSED' or event=='PLAYER_LEVEL_UP') then ns.UI.RenderGuide() end
     if ns.UI.activeTab == 'annora' and (event=='NEW_RECIPE_LEARNED' or event=='SKILL_LINES_CHANGED'
         or event=='TRADE_SKILL_LIST_UPDATE' or event=='PLAYER_LEVEL_UP') then ns.UI.RenderAnnora() end
+    if ns.UI.RenderTracker and (event=='BAG_UPDATE_DELAYED' or event=='GET_ITEM_INFO_RECEIVED'
+        or event=='SKILL_LINES_CHANGED' or event=='TRADE_SKILL_LIST_UPDATE') then ns.UI.RenderTracker() end
 end
 
 function ns.Pulse(elapsed)
@@ -734,6 +751,8 @@ function ns.Initialize()
     if ns.initialized then return end
     EnchantPilotDB=type(EnchantPilotDB)=='table' and EnchantPilotDB or {}
     ns.db=EnchantPilotDB
+    if type(ns.db.levelingGoal)~='number' or ns.db.levelingGoal<1 or ns.db.levelingGoal>300
+        or ns.db.levelingGoal~=math.floor(ns.db.levelingGoal) then ns.db.levelingGoal=300 end
     for key,value in pairs(defaults) do if ns.db[key]==nil then ns.db[key]=value end end
     -- Migrate 0.1.0 preferences: every replacement now uses real native input.
     ns.db.quickConfirm=false

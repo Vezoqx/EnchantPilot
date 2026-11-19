@@ -116,3 +116,24 @@ function G.Crafts(step, skill)
     if remaining <= 0 then return step[4] end
     return math.ceil(step[4] * remaining / (step[2] - step[1]))
 end
+
+function G.GoalPlan(skill, goal)
+    local entries = {}
+    if type(skill) ~= "number" or skill < 1 then return entries, "goal_no_skill" end
+    if type(goal) ~= "number" or goal < 1 or goal > 300 or goal ~= math.floor(goal) then
+        return entries, "goal_invalid"
+    end
+    if skill >= goal then return entries, "goal_reached" end
+    for _, step in ipairs(G.steps) do
+        local span = math.min(goal, step[2]) - math.max(skill, step[1])
+        if span > 0 and #step[5] > 0 then
+            local materials = {}
+            for i = 1, #step[5], 2 do
+                local id = step[5][i]
+                materials[#materials+1] = {itemID=id, per=step[5][i+1], name="#" .. id}
+            end
+            entries[#entries+1] = {count=math.ceil(step[4] * span / (step[2]-step[1])), materials=materials}
+        end
+    end
+    return entries, #entries == 0 and "goal_disenchant" or nil
+end

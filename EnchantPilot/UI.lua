@@ -265,7 +265,7 @@ local function setTab(key)
         if name == key then panel:Show() else panel:Hide() end
         if U.tabs[name] then
             local selected = name == key or (key == "targets" and name == "enchant")
-                or ((key == "budget" or key == "annora") and name == "leveling")
+                or ((key == "budget" or key == "annora" or key == "goal") and name == "leveling")
             U.tabs[name].background:SetColorTexture(unpackValues(selected and C.selected or C.button))
             U.tabs[name].label:SetTextColor(unpackValues(selected and C.teal or C.muted))
         end
@@ -274,6 +274,7 @@ local function setTab(key)
     elseif key == "plan" then U.RenderPlan()
     elseif key == "budget" then U.RenderBudget()
     elseif key == "annora" then U.RenderAnnora()
+    elseif key == "goal" then U.RenderGoal()
     elseif key == "history" then U.RenderHistory()
     elseif key == "leveling" then
         U.guidePage = ns.Leveling.Stage(ns.Leveling.Skill())
@@ -630,7 +631,9 @@ local SHOPPING_ROWS, SHOPPING_ROW_HEIGHT = 5, 54
 local function reagentName(material)
     local name = material.name
     if name:match("^#%d+$") and C_Item and C_Item.GetItemNameByID then
-        name = C_Item.GetItemNameByID(material.itemID) or name
+        local loaded = C_Item.GetItemNameByID(material.itemID)
+        if loaded then name = loaded
+        elseif C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(material.itemID) end
     end
     return name
 end
@@ -649,7 +652,8 @@ end
 local function createGuide(panel)
     local guide = {}
     U.guide = guide
-    text(panel, 0, 0, 254, 23, L.route_title, 16, C.teal)
+    text(panel, 0, 0, 168, 23, L.route_title, 14, C.teal, true)
+    button(panel, 173, 0, 82, 25, L.goal_button, function() setTab("goal") end)
     button(panel, 260, 0, 144, 25, L.budget_title, function() setTab("budget") end)
     guide.stage = text(panel, 0, 35, 404, 19, "", 13, {0.70, 0.81, 1, 1}, true)
     guide.name = text(panel, 0, 61, 404, 19, "", 14, C.amber, true)
@@ -855,11 +859,11 @@ function U.RenderPrices()
         U.formulaCost:SetText(string.format(L.formula_and_craft,
             formulaPrice and ((formulaEstimate and "~" or "") .. money(formulaPrice)) or "?",
             craftPrice and ((craftEstimate and "~" or "") .. money(craftPrice)) or "?"))
-    elseif ns.combinedPlan then U.formulaCost:SetText(L.plan_stock_once) end
+    elseif ns.combinedPlan then U.formulaCost:SetText(ns.combinedPlan.goal and L.goal_estimate or L.plan_stock_once) end
     local details = {}
     U.priceTotalBar.tooltip = nil
-    U.shoppingText:SetText(selection and #selection.materials == 0 and L.recipeMaterialsUnknown
-        or (quote and quote.issue and translated(quote.issue) or L.auction_choose_recipe))
+    U.shoppingText:SetText(quote and quote.issue and translated(quote.issue)
+        or (selection and #selection.materials == 0 and L.recipeMaterialsUnknown or L.auction_choose_recipe))
     local materials = {}
     U.missingQueries = {}
     if quote and not quote.issue then
@@ -928,7 +932,7 @@ function U.RenderPrices()
         local item = quote.shopping[material.itemID]
         local name = reagentName(material)
         local icon = C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(material.itemID)
-        row.icon:SetTexture(icon or material.icon or 134400)
+        row.icon:SetTexture(icon or (ns.ReagentIcons and ns.ReagentIcons[material.itemID]) or material.icon or 134400)
         row.name:SetText(name)
         row.query = name
         local details = string.format(L.auction_shopping_row, item.have or "?", item.required, item.needed or "?", amount(item))
@@ -1116,6 +1120,97 @@ function U.RenderPlan()
     enabled(list.view, #entries > 0)
 end
 
+function U.RenderTracker()
+    local tracker = U.tracker
+    if not tracker or not tracker:IsShown() then return end
+    local materials, issue = ns.GoalMaterials()
+    local first, last, pages
+    tracker.page, first, last, pages = pageRange(tracker.page, #tracker.rows, #materials)
+    tracker.title:SetText(string.format(L.goal_title, ns.db.levelingGoal))
+    tracker.summary:SetText(issue and translated(issue) or string.format(L.page, first, last, #materials))
+    enabled(tracker.prev, tracker.page > 1)
+    enabled(tracker.next, tracker.page < pages)
+    local visible = first > 0 and last-first+1 or 0
+    tracker:SetHeight(58 + visible*37)
+    for i, row in ipairs(tracker.rows) do
+        local material = i <= visible and materials[first+i-1]
+        if material then
+            local id, have = material.itemID, material.have
+            local name = reagentName(material)
+            local icon = C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(id)
+            row.icon:SetTexture(icon or (ns.ReagentIcons and ns.ReagentIcons[id]) or 134400)
+            row.label:SetText(name)
+            row.detail:SetText(string.format(L.tracker_stock, have or "?", material.per,
+                have and math.max(0, material.per-have) or "?"))
+            row.detail:SetTextColor(unpackValues(have and have >= material.per and C.teal or C.muted))
+            row:Show()
+        else row:Hide() end
+    end
+end
+
+function U.RenderGoal()
+    local materials, issue, maximum = ns.GoalMaterials()
+    U.goalStatus:SetText(issue and translated(issue) or
+        (maximum and maximum < ns.db.levelingGoal and string.format(L.goal_rank, maximum) or L.goal_estimate))
+    enabled(U.goalPrices, #materials > 0)
+    enabled(U.goalTracker, #materials > 0 or U.tracker:IsShown())
+end
+
+local function createGoal(panel)
+    text(panel, 0, 0, 404, 25, L.goal_button, 16, C.teal)
+    text(panel, 0, 35, 404, 48, L.goal_hint, 11, C.muted)
+    input(panel, 0, 90, 200, L.goal_skill, L.goal_setting, L.goal_hint, function()
+        if ns.combinedPlan and ns.combinedPlan.goal then ns.RebuildShoppingPlan(true, true) end
+        U.RenderGoal()
+        U.RenderTracker()
+    end, 300)
+    U.goalStatus = text(panel, 0, 145, 404, 45, "", 12, C.amber)
+    U.goalPrices = button(panel, 0, 201, 195, 29, L.plan_view, function()
+        ns.RebuildShoppingPlan(true, true)
+        U.reagentIndex, U.shoppingPage = 0, 1
+        setTab("prices")
+    end, true)
+    U.goalTracker = button(panel, 205, 201, 199, 29, L.tracker_toggle, function()
+        if U.tracker:IsShown() then U.tracker:Hide()
+        else U.tracker.page=1; U.tracker:Show(); U.RenderTracker() end
+        U.RenderGoal()
+    end)
+    button(panel, 0, 465, 106, 29, L.previous, function() setTab("leveling") end)
+
+    local tracker = CreateFrame("Frame", nil, UIParent)
+    U.tracker = tracker
+    tracker.page, tracker.rows = 1, {}
+    tracker:SetSize(248, 243)
+    tracker:SetPoint("TOPLEFT", UIParent, "CENTER", 75, 200)
+    tracker:SetClampedToScreen(true)
+    tracker:SetFrameStrata("HIGH")
+    tracker:SetMovable(true)
+    tracker:EnableMouse(true)
+    tracker:RegisterForDrag("LeftButton")
+    tracker:SetScript("OnDragStart", function(self) self:StartMoving() end)
+    tracker:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+    local backdrop = tracker:CreateTexture(nil, "BACKGROUND")
+    backdrop:SetAllPoints(tracker)
+    backdrop:SetColorTexture(unpackValues(C.background))
+    tracker.title = text(tracker, 8, 6, 210, 18, "", 12, C.teal, true)
+    button(tracker, 221, 4, 23, 20, "X", function() tracker:Hide() end)
+    tracker.prev = button(tracker, 5, 27, 28, 20, "<", function() tracker.page=tracker.page-1; U.RenderTracker() end)
+    tracker.next = button(tracker, 215, 27, 28, 20, ">", function() tracker.page=tracker.page+1; U.RenderTracker() end)
+    tracker.summary = text(tracker, 37, 29, 174, 20, "", 10, C.muted, true)
+    tracker.summary:SetJustifyH("CENTER")
+    for i=1,5 do
+        local row = CreateFrame("Frame", nil, tracker)
+        row:SetPoint("TOPLEFT", tracker, "TOPLEFT", 5, -53-(i-1)*37)
+        row:SetSize(238,34)
+        fill(row, 0, 0, 238, 34, C.card)
+        row.icon = framedIcon(row, 4, 5, 23)
+        row.label = text(row, 33, 2, 203, 15, "", 11, C.text, true)
+        row.detail = text(row, 33, 17, 203, 14, "", 10, C.muted, true)
+        tracker.rows[i] = row
+    end
+    tracker:Hide()
+end
+
 function U.RenderAnnora()
     local list = U.annoraList
     local skill, maximum = ns.Leveling.Skill()
@@ -1295,12 +1390,13 @@ function U.Create()
     createInventory(U.panels.disenchant)
     createPrices(U.panels.prices)
     createGuide(U.panels.leveling)
-    for _, key in ipairs({"plan", "budget", "history", "annora"}) do
+    for _, key in ipairs({"plan", "budget", "history", "annora", "goal"}) do
         local panel = CreateFrame("Frame", nil, frame)
         panel:SetPoint("TOPLEFT", frame, "TOPLEFT", 18, -102)
         panel:SetSize(404, 500)
         U.panels[key] = panel
     end
+    createGoal(U.panels.goal)
     local plan = createList(U.panels.plan, L.plan_title, L.plan_hint, "planList", U.RenderPlan, "prices")
     button(U.panels.plan, 112, 465, 132, 29, L.plan_add, function()
         U.pickingPlan, U.recipeMode, U.recipePage = true, "all", 1

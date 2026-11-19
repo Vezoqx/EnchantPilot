@@ -1,5 +1,5 @@
 local _, ns = ...
-ns.VERSION = '0.2.50-beta'
+ns.VERSION = '0.2.51-beta'
 local en = {
     prices='Prices', auction_scan='Reagent prices',
     auction_approximate_total='Approximate cost: %s',
@@ -216,7 +216,7 @@ local ru = {
     plan_clamped='Количество уменьшено до доступного по реагентам, с учётом запаса.',
     not_enchanting='Открой собственное наложение чар.', catalog_unavailable='Каталог рецептов недоступен.', recipe_data_pending='Ожидаем данные о рецептах.',
     recipe_select_failed='Игра не смогла выбрать рецепт.', keep_data_unavailable='Не удалось прочитать метки «Сохранить».',
-    subtitle='Удобный ритм прокачки зачарования', beta='0.2.50-бета / Forever 1.60.1',
+    subtitle='Удобный ритм прокачки зачарования', beta='0.2.51-бета / Forever 1.60.1',
     prices='Цены', auction_scan='Цены реагентов',
     auction_approximate_total='Приблизительная стоимость: %s',
     auction_auto_started='Сканирую весь аукцион. Пока он открыт, скан повторяется каждые 15 минут.',
@@ -420,6 +420,19 @@ local ru = {
     loaded='Загружен. Открой наложение чар и введи /ep.', sessionChanged='Настройки применятся при фиксации новой серии.',
 }
 local extra = {
+    goal_button={"Skill goal", "Цель навыка"},
+    goal_skill={"Target skill (1–300)", "Целевой навык (1–300)"},
+    goal_title={"Plan to skill %d", "План до навыка %d"},
+    goal_hint={"The route estimates reagents from your current skill. The shopping list subtracts what is in your bags.",
+        "Маршрут рассчитывает реагенты от текущего навыка. Список покупок вычитает запас в сумках."},
+    goal_estimate={"Estimated crafts and materials", "Примерное число попыток и реагентов"},
+    goal_rank={"Current cap: %d. Learn the next rank along the way.", "Текущий предел: %d. По пути нужно изучить следующий ранг."},
+    goal_invalid={"Enter a goal from 1 to 300.", "Введите цель от 1 до 300."},
+    goal_no_skill={"Open Enchanting to read your current skill.", "Откройте Наложение чар, чтобы узнать текущий навык."},
+    goal_reached={"Skill goal reached.", "Целевой навык достигнут."},
+    goal_disenchant={"Disenchant equipment for this part of the route.", "Для этого отрезка маршрута нужно распылить экипировку."},
+    tracker_toggle={"Show / hide tracker", "Показать / скрыть трекер"},
+    tracker_stock={"%s / %d in bags · Missing: %s", "В сумках %s / %d  |  Не хватает: %s"},
     version_notice={"EnchantPilot: you have %s. Another player has %s. Releases: %s (copy with /ep update).",
         "EnchantPilot: у вас версия %s, у другого игрока — %s. Релизы: %s (копировать: /ep update)."},
     version_link={"EnchantPilot releases", "Релизы EnchantPilot"},

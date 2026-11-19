@@ -2,7 +2,7 @@
 
 Аддон для Наложения чар в WoW Forever 1.60.1 (70959).
 
-1. Скачай [EnchantPilot 0.2.50-beta](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.50-beta/EnchantPilot-0.2.50-beta.zip).
+1. Скачай [EnchantPilot 0.2.51-beta](https://github.com/Vezoqx/EnchantPilot/releases/download/v0.2.51-beta/EnchantPilot-0.2.51-beta.zip).
 2. Распакуй папку EnchantPilot в Interface/AddOns клиента Forever.
 3. Включи аддон в списке модификаций и введи /ep. Для обновления уже загруженного аддона выполни /reload.
 
