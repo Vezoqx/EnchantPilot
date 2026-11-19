@@ -662,7 +662,8 @@ local function createGuide(panel)
     text(panel, 0, 0, 168, 23, L.route_title, 14, C.teal, true)
     button(panel, 173, 0, 82, 25, L.goal_button, function() setTab("goal") end)
     button(panel, 260, 0, 144, 25, L.stage_alternative, function()
-        U.budgetStage = ns.Leveling.steps[U.guidePage][3]
+        U.budgetStep = ns.Leveling.steps[U.guidePage]
+        U.budgetStage = U.budgetStep[3]
         U.budgetList.page = 1
         setTab("budget")
     end)
@@ -699,7 +700,8 @@ local function createGuide(panel)
     end)
     guide.add = button(panel, 105, 293, 194, 27, L.route_add, function()
         local step = ns.Leveling.steps[U.guidePage]
-        local entry = {recipeID=step[3], guideStage=step[1], name=guide.name:GetText(),
+        local replacement = ns.db.routeReplacements[step[1]]
+        local entry = {recipeID=replacement and replacement.recipeID or step[3], guideStage=step[1], name=guide.name:GetText(),
             count=guide.crafts, materials=guide.items}
         for i, saved in ipairs(ns.db.shoppingPlan) do
             if saved.guideStage == entry.guideStage then
@@ -729,6 +731,8 @@ end
 
 function U.RenderGuide()
     local guide, step = U.guide, ns.Leveling.steps[U.guidePage]
+    local replacement = ns.db.routeReplacements[step[1]]
+    local id = replacement and replacement.recipeID or step[3]
     local ru = GetLocale and GetLocale() == "ruRU"
     local horde = UnitFactionGroup and UnitFactionGroup("player") == "Horde"
     local vendor = step[6] and step[6][(ru and 0 or 2)+(horde and 2 or 1)]
@@ -736,9 +740,10 @@ function U.RenderGuide()
     local crafts = ns.Leveling.Crafts(step, skill)
     guide.crafts, guide.items = crafts, {}
     guide.stage:SetText(string.format(L.route_stage, step[1], step[2], crafts))
-    local name = C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(step[3])
-    guide.name:SetText(name or ("#" .. step[3]))
-    local trainer, available, requiredSkill, requiredLevel = ns.Leveling.Lesson(step[3], skill, horde)
+    local name = replacement and replacement.name or (C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id))
+    guide.name:SetText(name or ("#" .. id))
+    local trainer, available, requiredSkill, requiredLevel
+    if not replacement then trainer, available, requiredSkill, requiredLevel = ns.Leveling.Lesson(id, skill, horde) end
     guide.pin.trainer = trainer
     if trainer then
         local trainerName = trainer[ru and 4 or 5]
@@ -749,22 +754,26 @@ function U.RenderGuide()
         guide.pin.tooltip = string.format(L.route_pin_hint, trainerName, trainer[2], trainer[3], requiredSkill, requiredLevel)
         guide.pin:Show()
     else
-        guide.source:SetText(vendor and string.format(L.route_vendor, vendor) or (step[1] == 1 and L.route_first_rod or ""))
+        guide.source:SetText(replacement and L.stage_saved_estimate
+            or vendor and string.format(L.route_vendor, vendor) or (step[1] == 1 and L.route_first_rod or ""))
         guide.source:SetTextColor(unpackValues(C.amber))
         guide.pin:Hide()
     end
     guide.hint:SetText(step[1] == 2 and L.route_disenchant or "")
+    local materials = ns.Leveling.StepMaterials(step,replacement)
+    for _, material in ipairs(materials) do
+        local id = material.itemID
+        local itemName = C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(id)
+        if not itemName and C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
+        local icon = (ns.ReagentIcons and ns.ReagentIcons[id])
+            or (C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(id)) or material.icon or 134400
+        guide.items[#guide.items+1] = {itemID=id, per=material.per, name=itemName or material.name, icon=icon}
+    end
     for i, row in ipairs(guide.materials) do
-        local id, per = step[5][2*i-1], step[5][2*i]
-        if id then
-            local itemName = C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(id)
-            if not itemName and C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
-            local icon = (ns.ReagentIcons and ns.ReagentIcons[id])
-                or (C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(id)) or 134400
-            local material = {itemID=id, per=per, name=itemName or ("#" .. id), icon=icon}
-            guide.items[#guide.items+1] = material
-            row.icon:SetTexture(icon)
-            row.label:SetText(string.format(L.route_material, material.name, crafts*per, ns.Adapter.ReagentCount(id) or "?"))
+        local material = guide.items[i]
+        if material then
+            row.icon:SetTexture(material.icon)
+            row.label:SetText(string.format(L.route_material, material.name, crafts*material.per, ns.Adapter.ReagentCount(material.itemID) or "?"))
             row:Show()
         else row:Hide() end
     end
@@ -785,7 +794,7 @@ function U.RenderGuide()
     end
     local level = UnitLevel and UnitLevel("player")
     local action, first, second = ns.Leveling.NextAction(skill, maximum, ns.db.levelingGoal or 300,
-        level, ns.Catalog.IsLearned, ns.Adapter.ReagentCount)
+        level, ns.Catalog.IsLearned, ns.Adapter.ReagentCount, ns.db.routeReplacements)
     local detail, destination = L[action]
     local function spellName(id)
         return (C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id)) or ("#" .. id)
@@ -836,7 +845,7 @@ local function createPrices(panel)
     tooltip(U.scanPrices, L.auction_scan_hint)
     button(panel, 244, 86, 78, 21, L.plan_short, function() setTab("plan") end)
     button(panel, 326, 86, 78, 21, L.budget_short, function()
-        U.budgetStage = nil
+        U.budgetStage, U.budgetStep = nil, nil
         U.budgetList.page = 1
         setTab("budget")
     end)
@@ -878,7 +887,8 @@ local function createPrices(panel)
     U.priceTotalBar:SetSize(404, 25)
     U.priceTotalBar:EnableMouse(true)
     fill(U.priceTotalBar, 0, 0, 404, 25, C.card)
-    U.priceTotals = text(U.priceTotalBar, 7, 4, 390, 19, "", 13, C.text, true)
+    U.priceTotals = text(U.priceTotalBar, 7, 0, 390, 13, "", 11, C.text, true)
+    U.priceSavings = text(U.priceTotalBar, 7, 12, 390, 13, "", 10, C.teal, true)
     tooltip(U.priceTotalBar)
 end
 
@@ -899,6 +909,7 @@ function U.RenderPrices()
     U.priceStatus:SetText(status and (status.reason and translated(status.reason)
         or (not status.open and L.auction_open_first or translated(status.state))) or "")
     U.priceTotals:SetText(quote and quote.issue and translated(quote.issue) or "")
+    U.priceSavings:SetText("")
     local summary = auctionSummary()
     local summaryFresh = renderAuctionSummary(summary)
     U.formulaCost:SetText("")
@@ -959,6 +970,15 @@ function U.RenderPrices()
         if estimate then total = money(estimate) end
     end
     U.priceTotals:SetText(string.format(summaryFresh and L.auction_totals or L.auction_approximate_total, total))
+    if selection.original then
+        local original = ns.QuoteMaterials(selection.original, 1, 0)
+        local before = estimatedCost(original, "buy", summary)
+        local after = estimatedCost(quote, "buy", summary)
+        if before and after then
+            local delta = before-after
+            U.priceSavings:SetText(string.format(delta < 0 and L.stage_extra_cost or L.stage_savings, money(math.abs(delta))))
+        else U.priceSavings:SetText(L.stage_savings_unknown) end
+    end
     if quote.scannedAt then
         details[#details+1] = string.format(L.auction_source, quote.source or "C_AuctionHouse", date("%d.%m.%Y %H:%M", quote.scannedAt))
         if quote.latestAt ~= quote.scannedAt then
@@ -1339,6 +1359,15 @@ function U.RenderAnnora()
     list.note:SetText(string.format(L.annora_progress, skill or "?", maximum or "?"))
 end
 
+local function saveReplacement(replacement)
+    ns.db.routeReplacements[U.budgetStep[1]] = replacement
+    local scope = (ns.combinedPlan and ns.combinedPlan.goal) or U.tracker.scope or "goal"
+    ns.RebuildShoppingPlan(true, scope)
+    U.shoppingPage, U.reagentIndex = 1, nil
+    U.RenderTracker()
+    setTab("prices")
+end
+
 function U.RenderBudget()
     local list = U.budgetList
     local rows, cacheReason = ns.Catalog.List("", "learned", ns.db.favorites)
@@ -1354,7 +1383,10 @@ function U.RenderBudget()
         return cost and ((approximate and "~" or "") .. money(cost)) or L.budget_no_price
     end
     list.title:SetText(stage and L.stage_alternative or L.budget_title)
-    list.hint:SetText(stage and string.format(L.stage_compare,
+    local saved = U.budgetStep and ns.db.routeReplacements[U.budgetStep[1]]
+    if saved then list.reset:Show() else list.reset:Hide() end
+    list.note:SetWidth(saved and 141 or 290)
+    list.hint:SetText(saved and string.format(L.stage_current, saved.name) or stage and string.format(L.stage_compare,
         (C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(stage)) or ("#" .. stage),
         known == false and L.unlearned or price(baseline, baselineApprox)) or L.budget_hint)
     local staleSkill = cacheReason == "catalog_cached" and ns.Leveling.Skill() ~= ns.db.lastEnchantingSkill
@@ -1381,11 +1413,20 @@ function U.RenderBudget()
     listPage(list, entries)
     for _, row in ipairs(list.rows) do
         local entry = row.entry
+        row.replace.pick = nil
+        row.replace:Hide()
         if entry then
             row.name:SetText(entry.recipe.name)
             row.detail:SetText(string.format(L.stage_costs, price(entry.full, entry.fullApprox), price(entry.cost, entry.approximate)))
             row.pick = function()
                 if ns.ChoosePriceRecipe(entry.recipe) then ns.combinedPlan=nil; setTab("prices") end
+            end
+            local materials = U.budgetStep and #U.budgetStep[5] > 0 and ns.Adapter.RecipeReagents(entry.recipe.recipeID)
+            if materials and #materials > 0 then
+                row.replace.pick = function()
+                    saveReplacement({recipeID=entry.recipe.recipeID, name=entry.recipe.name, materials=materials})
+                end
+                row.replace:Show()
             end
         end
     end
@@ -1410,6 +1451,7 @@ end
 function U.Create()
     if U.frame then return U.frame end
     ns.db = ns.db or {}
+    ns.db.routeReplacements = ns.db.routeReplacements or {}
     ns.db.favorites, ns.db.keep = ns.db.favorites or {}, ns.db.keep or {}
     local frame = CreateFrame("Frame", "EnchantPilotFrame", UIParent)
     U.frame = frame
@@ -1564,6 +1606,10 @@ function U.Create()
     end)
     annora.note = text(U.panels.annora, 115, 470, 289, 25, "", 11, C.muted)
     budget.note = text(U.panels.budget, 112, 468, 290, 22, "", 10, C.amber)
+    budget.reset = button(U.panels.budget, 260, 465, 144, 29, L.stage_reset, function() saveReplacement(nil) end)
+    for _, row in ipairs(budget.rows) do
+        row.replace = button(row, 310, 5, 88, 15, L.stage_replace, function(self) if self.pick then self.pick() end end)
+    end
     createList(U.panels.history, L.de_history, L.de_history_hint, "historyList", U.RenderHistory, "disenchant")
     text(frame, 18, 614, 286, 29, L.keyHelp, 9, C.muted)
     U.auctionSummary = text(frame, 18, 630, 291, 15, "", 10, C.muted, true)

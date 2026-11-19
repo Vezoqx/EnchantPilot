@@ -1,5 +1,5 @@
 local _, ns = ...
-ns.VERSION = '0.2.56-beta'
+ns.VERSION = '0.2.57-beta'
 local en = {
     prices='Prices', auction_scan='Reagent prices',
     auction_approximate_total='Approximate cost: %s',
@@ -216,7 +216,7 @@ local ru = {
     plan_clamped='Количество уменьшено до доступного по реагентам, с учётом запаса.',
     not_enchanting='Открой собственное наложение чар.', catalog_unavailable='Каталог рецептов недоступен.', recipe_data_pending='Ожидаем данные о рецептах.',
     recipe_select_failed='Игра не смогла выбрать рецепт.', keep_data_unavailable='Не удалось прочитать метки «Сохранить».',
-    subtitle='Удобный ритм прокачки зачарования', beta='0.2.56-бета / Forever 1.60.1',
+    subtitle='Удобный ритм прокачки зачарования', beta='0.2.57-бета / Forever 1.60.1',
     prices='Цены', auction_scan='Цены реагентов',
     auction_approximate_total='Приблизительная стоимость: %s',
     auction_auto_started='Сканирую весь аукцион. Пока он открыт, скан повторяется каждые 15 минут.',
@@ -374,7 +374,7 @@ local ru = {
     deLootPartial='Может выпасть (неполные данные)',
     deLootUnit='Выкуп на аукционе за штуку: %s',
     deLootSummaryUnit='Минимум за кристалл по сводке: %s',
-    deLootSummaryValue='Оценка добычи по сводке: %s',
+    deLootSummaryValue='Оценка добычи: %s',
     deLootNoCachedPrice='Нет актуальных сохранённых цен на добычу.',
     deLootScanHint='Сканирует цены выкупа этих материалов на открытом аукционе.',
     deLootValue='В среднем по ценам аукциона: %s', deLootNoPrice='Нужны свежие цены всех материалов.',
@@ -486,6 +486,13 @@ local extra = {
     plan_stock_once={"Bag stock counted once per reagent", "Запас в сумках учитывается один раз на реагент"},
     budget_short={"Leveling", "Прокачка"}, budget_title={"Budget leveling", "Бюджетная прокачка"},
     budget_hint={"Learned recipes that can raise skill. Cost to buy missing reagents for one craft.", "Изученные рецепты, которые могут дать навык. Стоимость докупки на одно изготовление."},
+    stage_replace={"Replace", "Заменить"},
+    stage_reset={"Restore original", "Вернуть исходный"},
+    stage_current={"Saved replacement: %s", "Замена в маршруте: %s"},
+    stage_saved_estimate={"Saved replacement. Attempts are estimated.", "Замена сохранена. Число попыток примерное."},
+    stage_savings={"Estimated savings: %s", "Оценка экономии: %s"},
+    stage_extra_cost={"Estimated extra cost: %s", "Оценка доплаты: %s"},
+    stage_savings_unknown={"Savings unavailable: missing prices", "Экономия неизвестна: не хватает цен"},
     budget_cached={"Open Enchanting to refresh skill-up data.", "Откройте Наложение чар для обновления данных навыка."},
     budget_no_price={"Price unavailable", "Нет данных о цене"},
     next_reagent={"Next reagent", "Следующий реагент"},

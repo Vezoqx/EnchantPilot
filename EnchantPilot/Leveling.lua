@@ -136,7 +136,17 @@ function G.Crafts(step, skill)
     return math.ceil(step[4] * remaining / (step[2] - step[1]))
 end
 
-function G.NextAction(skill, maximum, goal, level, learned, count)
+function G.StepMaterials(step, replacement)
+    if replacement then return replacement.materials end
+    local materials = {}
+    for i=1,#step[5],2 do
+        local id = step[5][i]
+        materials[#materials+1] = {itemID=id, per=step[5][i+1], name="#" .. id}
+    end
+    return materials
+end
+
+function G.NextAction(skill, maximum, goal, level, learned, count, replacements)
     if not skill or skill < 1 then return "goal_no_skill" end
     if skill >= goal then return "goal_reached" end
     if maximum and skill >= maximum then
@@ -147,16 +157,17 @@ function G.NextAction(skill, maximum, goal, level, learned, count)
         return "next_rank", rank
     end
     local step = G.steps[G.Stage(skill)]
-    local id = step[3]
+    local replacement = replacements and replacements[step[1]]
+    local id = replacement and replacement.recipeID or step[3]
     if #step[5] == 0 then return "goal_disenchant" end
     local known = learned(id)
     if known == nil then return "next_recipe_unknown" end
-    if not known then return "next_learn", id, step[6] end
+    if not known then return "next_learn", id, not replacement and step[6] or nil end
     local attempts = math.ceil(step[4] * (math.min(goal, step[2], maximum or 300)-skill)/(step[2]-step[1]))
     local available = attempts
     local missingID, missingCount
-    for i = 1, #step[5], 2 do
-        local item, per = step[5][i], step[5][i+1]
+    for _, material in ipairs(G.StepMaterials(step,replacement)) do
+        local item, per = material.itemID, material.per
         local have = count(item)
         if have == nil then return "next_bags_unknown" end
         available = math.min(available, math.floor(have/per))
@@ -166,7 +177,7 @@ function G.NextAction(skill, maximum, goal, level, learned, count)
     return "next_buy", missingCount, missingID
 end
 
-function G.GoalPlan(skill, goal, maximum, scope)
+function G.GoalPlan(skill, goal, maximum, scope, replacements)
     local entries = {}
     if scope == "trainer" then
         if maximum == 300 then return entries, "goal_no_next_trainer" end
@@ -183,16 +194,15 @@ function G.GoalPlan(skill, goal, maximum, scope)
         return entries, "goal_invalid"
     end
     if skill >= goal then return entries, "goal_reached" end
+    local changed
     for _, step in ipairs(G.steps) do
         local span = math.min(goal, step[2]) - math.max(skill, step[1])
         if span > 0 and #step[5] > 0 then
-            local materials = {}
-            for i = 1, #step[5], 2 do
-                local id = step[5][i]
-                materials[#materials+1] = {itemID=id, per=step[5][i+1], name="#" .. id}
-            end
+            local replacement = replacements and replacements[step[1]]
+            local materials = G.StepMaterials(step,replacement)
+            changed = changed or replacement ~= nil
             entries[#entries+1] = {count=math.ceil(step[4] * span / (step[2]-step[1])), materials=materials}
         end
     end
-    return entries, #entries == 0 and "goal_disenchant" or nil, goal
+    return entries, #entries == 0 and "goal_disenchant" or nil, goal, changed
 end

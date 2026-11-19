@@ -141,6 +141,9 @@ function ns.ScanPrices()
     refreshPriceSelection()
     if ns.combinedPlan and ns.combinedPlan.goal then ns.RebuildShoppingPlan(true, ns.combinedPlan.goal) end
     local ids = priceItemIDs(ns.combinedPlan or ns.priceSelection)
+    if ns.combinedPlan and ns.combinedPlan.original then
+        for _, material in ipairs(ns.combinedPlan.original) do ids[#ids+1]=material.itemID end
+    end
     local formula = ns.priceSelection and ns.priceSelection.learned == false and ns.Catalog
         and ns.Catalog.FormulaItemID(ns.priceSelection.recipeID)
     if formula and not ns.combinedPlan then ids[#ids+1] = formula end
@@ -149,24 +152,26 @@ function ns.ScanPrices()
     return ok, why
 end
 
-function ns.GoalMaterials(scope)
+function ns.GoalMaterials(scope, original)
     local skill, maximum = ns.Leveling.Skill()
-    local plan, issue, limit = ns.Leveling.GoalPlan(skill, ns.db.levelingGoal, maximum, scope)
+    local replacements = not original and ns.db.routeReplacements or nil
+    local plan, issue, limit, changed = ns.Leveling.GoalPlan(skill, ns.db.levelingGoal, maximum, scope, replacements)
     local materials = ns.PriceModel.CombineRecipes(plan, A.ReagentCount)
     local bank = ns.db.personalBank
     if type(bank) == 'table' and type(bank.counts) == 'table' then
         for _, row in ipairs(materials) do row.bank = bank.counts[row.itemID] or 0 end
     end
-    return materials, issue, maximum, limit
+    return materials, issue, maximum, limit, changed
 end
 
 function ns.RebuildShoppingPlan(active, goal)
     if active and goal then
-        local materials, issue, _, limit = ns.GoalMaterials(goal)
+        local materials, issue, _, limit, changed = ns.GoalMaterials(goal)
         local name = goal == 'trainer'
             and (limit and string.format(ns.L.goal_trainer_title, limit) or ns.L.goal_trainer)
             or string.format(ns.L.goal_title, ns.db.levelingGoal)
         ns.combinedPlan = {name=name, materials=materials, limit=limit,
+            original=changed and ns.GoalMaterials(goal, true) or nil,
             issue=issue, shoppingOnly=true, goal=goal}
         return ns.combinedPlan
     end
@@ -778,6 +783,7 @@ function ns.Initialize()
     if ns.initialized then return end
     EnchantPilotDB=type(EnchantPilotDB)=='table' and EnchantPilotDB or {}
     ns.db=EnchantPilotDB
+    if type(ns.db.routeReplacements)~='table' then ns.db.routeReplacements={} end
     if type(ns.db.levelingGoal)~='number' or ns.db.levelingGoal<1 or ns.db.levelingGoal>300
         or ns.db.levelingGoal~=math.floor(ns.db.levelingGoal) then ns.db.levelingGoal=300 end
     for key,value in pairs(defaults) do if ns.db[key]==nil then ns.db[key]=value end end
