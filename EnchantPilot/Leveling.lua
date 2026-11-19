@@ -117,6 +117,36 @@ function G.Crafts(step, skill)
     return math.ceil(step[4] * remaining / (step[2] - step[1]))
 end
 
+function G.NextAction(skill, maximum, goal, level, learned, count)
+    if not skill or skill < 1 then return "goal_no_skill" end
+    if skill >= goal then return "goal_reached" end
+    if maximum and skill >= maximum then
+        local rank = ({[75]=1, [150]=2, [225]=3})[maximum]
+        if not rank then return "next_cap_unknown" end
+        local minimum = ({10,20,35})[rank]
+        if level and level < minimum then return "next_rank_level", minimum, rank end
+        return "next_rank", rank
+    end
+    local step = G.steps[G.Stage(skill)]
+    local id = step[3]
+    if #step[5] == 0 then return "goal_disenchant" end
+    local known = learned(id)
+    if known == nil then return "next_recipe_unknown" end
+    if not known then return "next_learn", id, step[6] end
+    local attempts = math.ceil(step[4] * (math.min(goal, step[2], maximum or 300)-skill)/(step[2]-step[1]))
+    local available = attempts
+    local missingID, missingCount
+    for i = 1, #step[5], 2 do
+        local item, per = step[5][i], step[5][i+1]
+        local have = count(item)
+        if have == nil then return "next_bags_unknown" end
+        available = math.min(available, math.floor(have/per))
+        if not missingID and have < per then missingID, missingCount = item, per-have end
+    end
+    if available > 0 then return "next_craft", available, id end
+    return "next_buy", missingCount, missingID
+end
+
 function G.GoalPlan(skill, goal)
     local entries = {}
     if type(skill) ~= "number" or skill < 1 then return entries, "goal_no_skill" end

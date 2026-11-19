@@ -449,6 +449,16 @@ local function cachedRows()
     return rows
 end
 
+function Catalog.IsLearned(id)
+    if currentProfession() and C_TradeSkillUI.GetRecipeInfo then
+        local info = C_TradeSkillUI.GetRecipeInfo(id)
+        if readable(info, "table") and readable(info.learned, "boolean") then return info.learned end
+    end
+    for _, recipe in ipairs(cachedRows() or {}) do
+        if recipe.recipeID == id then return recipe.learned end
+    end
+end
+
 function Catalog.RefreshCache()
     local ok, rows, reason = pcall(currentRows)
     if not ok then return false, "catalog_unavailable" end

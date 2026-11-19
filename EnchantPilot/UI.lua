@@ -706,7 +706,14 @@ local function createGuide(panel)
         guide.trainers[rank] = button(panel, 0, 363+(rank-1)*31, 404, 27, "", markTrainer)
         tooltip(guide.trainers[rank])
     end
-    guide.notice = text(panel, 0, 465, 404, 31, "", 11, C.amber)
+    guide.action = text(panel, 0, 457, 365, 31, "", 11, C.teal)
+    guide.actionPin = button(panel, 376, 457, 28, 26, "", markTrainer)
+    local actionIcon = guide.actionPin:CreateTexture(nil, "ARTWORK")
+    actionIcon:SetPoint("CENTER")
+    actionIcon:SetSize(18, 18)
+    actionIcon:SetAtlas("Waypoint-MapPin-ChatIcon")
+    tooltip(guide.actionPin)
+    guide.notice = text(panel, 0, 485, 404, 15, "", 10, C.amber, true)
 end
 
 function U.RenderGuide()
@@ -714,7 +721,7 @@ function U.RenderGuide()
     local ru = GetLocale and GetLocale() == "ruRU"
     local horde = UnitFactionGroup and UnitFactionGroup("player") == "Horde"
     local vendor = step[6] and step[6][(ru and 0 or 2)+(horde and 2 or 1)]
-    local skill = ns.Leveling.Skill()
+    local skill, maximum = ns.Leveling.Skill()
     local crafts = ns.Leveling.Crafts(step, skill)
     guide.crafts, guide.items = crafts, {}
     guide.stage:SetText(string.format(L.route_stage, step[1], step[2], crafts))
@@ -765,6 +772,34 @@ function U.RenderGuide()
         local stageRank = step[1] < 150 and 1 or step[1] < 225 and 2 or 3
         control.background:SetColorTexture(unpackValues(stageRank == rank and C.selected or C.button))
     end
+    local level = UnitLevel and UnitLevel("player")
+    local action, first, second = ns.Leveling.NextAction(skill, maximum, ns.db.levelingGoal or 300,
+        level, ns.Catalog.IsLearned, ns.Adapter.ReagentCount)
+    local detail, destination = L[action]
+    local function spellName(id)
+        return (C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id)) or ("#" .. id)
+    end
+    if action == "next_rank" then
+        destination = ns.Leveling.Trainer(first, horde)
+        detail = string.format(detail, L["next_rank_" .. first], destination[ru and 4 or 5])
+    elseif action == "next_rank_level" then
+        detail = string.format(detail, first, L["next_rank_" .. second])
+    elseif action == "next_learn" then
+        destination = ns.Leveling.Lesson(first, skill, horde)
+        local provider = destination and destination[ru and 4 or 5]
+            or second and second[(ru and 0 or 2)+(horde and 2 or 1)]
+        detail = string.format(provider and L.next_learn_from or detail, spellName(first), provider)
+    elseif action == "next_craft" then
+        detail = string.format(detail, first, spellName(second))
+    elseif action == "next_buy" then
+        detail = string.format(detail, first, reagentName({itemID=second,name="#" .. second}))
+    end
+    guide.action:SetText(string.format(L.next_action, detail))
+    guide.actionPin.trainer = destination
+    if destination then
+        guide.actionPin.tooltip = string.format(L.next_pin, destination[ru and 4 or 5])
+        guide.actionPin:Show()
+    else guide.actionPin:Hide() end
 end
 
 local function createPrices(panel)

@@ -671,7 +671,8 @@ function ns.OnEvent(event,...)
     ns.Refresh()
     if ns.UI.activeTab == 'leveling' and (event=='GET_ITEM_INFO_RECEIVED' or event=='BAG_UPDATE_DELAYED'
         or event=='SKILL_LINES_CHANGED' or event=='TRAINER_SHOW' or event=='TRAINER_UPDATE'
-        or event=='TRAINER_CLOSED' or event=='PLAYER_LEVEL_UP') then ns.UI.RenderGuide() end
+        or event=='TRAINER_CLOSED' or event=='PLAYER_LEVEL_UP' or event=='NEW_RECIPE_LEARNED'
+        or event=='TRADE_SKILL_LIST_UPDATE') then ns.UI.RenderGuide() end
     if ns.UI.activeTab == 'annora' and (event=='NEW_RECIPE_LEARNED' or event=='SKILL_LINES_CHANGED'
         or event=='TRADE_SKILL_LIST_UPDATE' or event=='PLAYER_LEVEL_UP') then ns.UI.RenderAnnora() end
     if ns.UI.RenderTracker and (event=='BAG_UPDATE_DELAYED' or event=='GET_ITEM_INFO_RECEIVED'

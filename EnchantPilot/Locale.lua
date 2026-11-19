@@ -1,5 +1,5 @@
 local _, ns = ...
-ns.VERSION = '0.2.51-beta'
+ns.VERSION = '0.2.52-beta'
 local en = {
     prices='Prices', auction_scan='Reagent prices',
     auction_approximate_total='Approximate cost: %s',
@@ -216,7 +216,7 @@ local ru = {
     plan_clamped='Количество уменьшено до доступного по реагентам, с учётом запаса.',
     not_enchanting='Открой собственное наложение чар.', catalog_unavailable='Каталог рецептов недоступен.', recipe_data_pending='Ожидаем данные о рецептах.',
     recipe_select_failed='Игра не смогла выбрать рецепт.', keep_data_unavailable='Не удалось прочитать метки «Сохранить».',
-    subtitle='Удобный ритм прокачки зачарования', beta='0.2.51-бета / Forever 1.60.1',
+    subtitle='Удобный ритм прокачки зачарования', beta='0.2.52-бета / Forever 1.60.1',
     prices='Цены', auction_scan='Цены реагентов',
     auction_approximate_total='Приблизительная стоимость: %s',
     auction_auto_started='Сканирую весь аукцион. Пока он открыт, скан повторяется каждые 15 минут.',
@@ -420,6 +420,18 @@ local ru = {
     loaded='Загружен. Открой наложение чар и введи /ep.', sessionChanged='Настройки применятся при фиксации новой серии.',
 }
 local extra = {
+    next_action={"Next: %s", "Дальше: %s"},
+    next_rank={"Learn %s from %s.", "Изучить ранг «%s». Учитель: %s."},
+    next_rank_1={"Journeyman", "Подмастерье"}, next_rank_2={"Expert", "Умелец"}, next_rank_3={"Artisan", "Искусник"},
+    next_rank_level={"Reach level %d to learn %s.", "Достичь уровня %d, чтобы изучить ранг «%s»."},
+    next_cap_unknown={"Check the profession's skill cap.", "Проверить предел навыка в окне профессии."},
+    next_recipe_unknown={"Open Enchanting to check learned recipes.", "Открыть Наложение чар для проверки изученных рецептов."},
+    next_learn={"Learn %s.", "Изучить рецепт «%s»."},
+    next_learn_from={"Learn %s from %s.", "Изучить «%s». Источник: %s."},
+    next_craft={"Reagents for %d attempts: %s.", "Реагентов хватит на %d попыток: %s."},
+    next_buy={"Get %d x %s for one craft.", "Добыть или докупить %d x %s для одной попытки."},
+    next_bags_unknown={"Waiting for reagent counts.", "Ожидаем данные о реагентах в сумках."},
+    next_pin={"Mark on map: %s", "Отметить на карте: %s"},
     goal_button={"Skill goal", "Цель навыка"},
     goal_skill={"Target skill (1–300)", "Целевой навык (1–300)"},
     goal_title={"Plan to skill %d", "План до навыка %d"},
