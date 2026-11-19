@@ -170,6 +170,38 @@ function A.ReagentCount(id)
     if number(count) and count >= 0 and count == math.floor(count) then return count end
 end
 
+function A.PersonalBankCounts()
+    local bank = Enum and Enum.BankType and Enum.BankType.Character
+    local containers = C_Container
+    if bank == nil or not C_Bank or not containers
+        or not containers.GetContainerItemID or not containers.GetContainerItemInfo
+        or call(C_Bank.CanViewBank, bank) ~= true then return end
+    local tabs = call(C_Bank.FetchPurchasedBankTabIDs, bank)
+    local purchased = call(C_Bank.FetchNumPurchasedBankTabs, bank)
+    if not public(tabs) or type(tabs) ~= "table" or not number(purchased)
+        or purchased < 1 or #tabs ~= purchased then return end
+    local counts, seen = {}, {}
+    for _, tab in ipairs(tabs) do
+        if not number(tab) or seen[tab] then return end
+        seen[tab] = true
+        local slots = call(containers.GetContainerNumSlots, tab)
+        if not number(slots) or slots < 1 then return end
+        for slot=1,slots do
+            local ok, info = pcall(containers.GetContainerItemInfo, tab, slot)
+            if not ok or not public(info) then return end
+            if type(info) == "table" then
+                local id, count = info.itemID, info.stackCount
+                if not number(id) or id < 1 or not number(count) or count < 1 then return end
+                counts[id] = (counts[id] or 0)+count
+            else
+                local read, id = pcall(containers.GetContainerItemID, tab, slot)
+                if info ~= nil or not read or not public(id) or id ~= nil then return end
+            end
+        end
+    end
+    return counts
+end
+
 local function recipeMaterials(recipeID)
     local schematic = C_TradeSkillUI and call(C_TradeSkillUI.GetRecipeSchematic, recipeID, false)
     if type(schematic) ~= "table" or type(schematic.reagentSlotSchematics) ~= "table" then

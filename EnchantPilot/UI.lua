@@ -903,9 +903,12 @@ function U.RenderPrices()
             formulaPrice and ((formulaEstimate and "~" or "") .. money(formulaPrice)) or "?",
             craftPrice and ((craftEstimate and "~" or "") .. money(craftPrice)) or "?"))
     elseif ns.combinedPlan then
-        U.formulaCost:SetText(ns.combinedPlan.goal == "trainer" and ns.combinedPlan.limit
-            and string.format(L.goal_trainer_limit, ns.combinedPlan.limit)
-            or ns.combinedPlan.goal and L.goal_estimate or L.plan_stock_once)
+        local saved = ns.db.personalBank
+        local status = ns.bankOpen and ns.bankCurrent and L.goal_bank_live
+            or (type(saved) == "table" and finite(saved.time)
+                and string.format(L.goal_bank_stamp, date("%d.%m.%Y %H:%M", saved.time)))
+            or L.goal_bank_unknown
+        U.formulaCost:SetText(ns.combinedPlan.goal and status or L.plan_stock_once)
     end
     local details = {}
     U.priceTotalBar.tooltip = nil
@@ -982,7 +985,12 @@ function U.RenderPrices()
         row.icon:SetTexture(icon or (ns.ReagentIcons and ns.ReagentIcons[material.itemID]) or material.icon or 134400)
         row.name:SetText(name)
         row.query = name
-        local details = string.format(L.auction_shopping_row, item.have or "?", item.required, item.needed or "?", amount(item))
+        local details
+        if ns.combinedPlan and ns.combinedPlan.goal then
+            details = string.format(L.goal_bank_row, item.have or "?", item.bank or "?", item.required, item.needed or "?", amount(item))
+        else
+            details = string.format(L.auction_shopping_row, item.have or "?", item.required, item.needed or "?", amount(item))
+        end
         if item.extra and item.extra > 0 then details = details .. "\n" .. string.format(L.auction_extra, item.extra) end
         local minimum = summary and summary.prices[material.itemID]
         if finite(minimum) and minimum > 0 and minimum == math.floor(minimum) and (not item.extra or item.extra == 0) then
@@ -1189,9 +1197,14 @@ function U.RenderTracker()
             local icon = C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(id)
             row.icon:SetTexture(icon or (ns.ReagentIcons and ns.ReagentIcons[id]) or 134400)
             row.label:SetText(name)
-            row.detail:SetText(string.format(L.tracker_stock, have or "?", material.per,
-                have and math.max(0, material.per-have) or "?"))
-            row.detail:SetTextColor(unpackValues(have and have >= material.per and C.teal or C.muted))
+            local owned = have and have + (material.bank or 0)
+            local missing = owned and math.max(0, material.per-owned) or "?"
+            if material.bank ~= nil then
+                row.detail:SetText(string.format(L.tracker_bank_stock, have or "?", material.bank, missing))
+            else
+                row.detail:SetText(string.format(L.tracker_stock, have or "?", material.per, missing))
+            end
+            row.detail:SetTextColor(unpackValues(owned and owned >= material.per and C.teal or C.muted))
             row:Show()
         else row:Hide() end
     end

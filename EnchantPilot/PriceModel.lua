@@ -135,7 +135,8 @@ function P.Quote(materials, casts, reserveCasts, prices, context)
     local seen = {}
     for _, mat in ipairs(materials) do
         if type(mat) ~= 'table' or not integer(mat.itemID, 1) or not integer(mat.per, 1)
-            or seen[mat.itemID] or (mat.have ~= nil and not integer(mat.have, 0)) then
+            or seen[mat.itemID] or (mat.have ~= nil and not integer(mat.have, 0))
+            or (mat.bank ~= nil and not integer(mat.bank, 0)) then
             return {issue='auction_invalid_plan'}
         end
         seen[mat.itemID] = true
@@ -155,13 +156,13 @@ function P.Quote(materials, casts, reserveCasts, prices, context)
         addCost(result.series, mat.per * casts, record, mat.itemID, result.missing)
         local required = mat.per * (casts + reserveCasts)
         addCost(result.full, required, record, mat.itemID, result.missing)
-        local row = {have=mat.have, required=required}
+        local row = {have=mat.have, bank=mat.bank, required=required}
         result.shopping[mat.itemID] = row
         if mat.have == nil and required > 0 then
             row.issue = 'auction_stock_unknown'
             result.buy.total, result.buy.issue = nil, row.issue
         else
-            row.needed = math.max(0, required - (mat.have or 0))
+            row.needed = math.max(0, required - (mat.have or 0) - (mat.bank or 0))
             row.total, row.issue, row.extra = addCost(result.buy, row.needed, record, mat.itemID, result.missing)
         end
     end

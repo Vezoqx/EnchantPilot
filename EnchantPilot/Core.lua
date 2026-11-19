@@ -5,6 +5,7 @@ local clockAccumulator = 0
 local snapshotAccumulator = 0
 local nextAuctionRefresh
 local openingAuctionRefresh
+local bankRefreshAt
 local AUCTION_REFRESH_INTERVAL = 15 * 60
 local deSeen = {}
 ns.deMarked = {}
@@ -151,13 +152,20 @@ end
 function ns.GoalMaterials(scope)
     local skill, maximum = ns.Leveling.Skill()
     local plan, issue, limit = ns.Leveling.GoalPlan(skill, ns.db.levelingGoal, maximum, scope)
-    return ns.PriceModel.CombineRecipes(plan, A.ReagentCount), issue, maximum, limit
+    local materials = ns.PriceModel.CombineRecipes(plan, A.ReagentCount)
+    local bank = ns.db.personalBank
+    if type(bank) == 'table' and type(bank.counts) == 'table' then
+        for _, row in ipairs(materials) do row.bank = bank.counts[row.itemID] or 0 end
+    end
+    return materials, issue, maximum, limit
 end
 
 function ns.RebuildShoppingPlan(active, goal)
     if active and goal then
         local materials, issue, _, limit = ns.GoalMaterials(goal)
-        local name = goal == 'trainer' and ns.L.goal_trainer or string.format(ns.L.goal_title, ns.db.levelingGoal)
+        local name = goal == 'trainer'
+            and (limit and string.format(ns.L.goal_trainer_title, limit) or ns.L.goal_trainer)
+            or string.format(ns.L.goal_title, ns.db.levelingGoal)
         ns.combinedPlan = {name=name, materials=materials, limit=limit,
             issue=issue, shoppingOnly=true, goal=goal}
         return ns.combinedPlan
@@ -604,6 +612,15 @@ end
 function ns.OnEvent(event,...)
     if event=='PLAYER_LOGIN' then ns.Initialize();return end
     if not ns.initialized then return end
+    if event=='BANKFRAME_OPENED' then
+        ns.bankOpen, ns.bankCurrent = true, false
+    elseif event=='BANKFRAME_CLOSED' then
+        ns.bankOpen, ns.bankCurrent, bankRefreshAt = false, false, nil
+    end
+    if ns.bankOpen and (event=='BANKFRAME_OPENED' or event=='BAG_UPDATE_DELAYED'
+        or event=='PLAYERBANKSLOTS_CHANGED' or event=='BANK_TABS_CHANGED') then
+        bankRefreshAt = bankRefreshAt or now()+0.2
+    end
     if event=='CHAT_MSG_ADDON' or event=='GROUP_ROSTER_UPDATE' or event=='PLAYER_GUILD_UPDATE' then
         if ns.VersionNotice then ns.VersionNotice.OnEvent(event,...) end
         return
@@ -682,6 +699,14 @@ end
 
 function ns.Pulse(elapsed)
     if not ns.initialized then return end
+    if bankRefreshAt and now() >= bankRefreshAt then
+        bankRefreshAt = nil
+        local counts = A.PersonalBankCounts()
+        local time = GetServerTime and GetServerTime()
+        ns.bankCurrent = counts and time and true or false
+        if ns.bankCurrent then ns.db.personalBank = {counts=counts, time=time} end
+        if ns.UI.RenderTracker then ns.UI.RenderTracker() end
+    end
     clockAccumulator=clockAccumulator+elapsed
     snapshotAccumulator=snapshotAccumulator+elapsed
     if clockAccumulator<0.1 then return end
@@ -801,6 +826,7 @@ SlashCmdList.ENCHANTPILOT=function(command)
 end
 
 for _,event in ipairs({'PLAYER_LOGIN','PLAYER_LOGOUT','PLAYER_LEVEL_UP','CHAT_MSG_ADDON','GROUP_ROSTER_UPDATE','PLAYER_GUILD_UPDATE',
+    'BANKFRAME_OPENED','BANKFRAME_CLOSED','PLAYERBANKSLOTS_CHANGED','BANK_TABS_CHANGED',
     'LOOT_READY','LOOT_OPENED','TRAINER_SHOW','TRAINER_UPDATE','TRAINER_CLOSED',
     'PLAYER_REGEN_DISABLED','PLAYER_STARTED_MOVING','TRADE_SKILL_SHOW','TRADE_SKILL_CLOSE',
     'TRADE_SKILL_LIST_UPDATE','TRADE_SKILL_DATA_SOURCE_CHANGED','SKILL_LINES_CHANGED','NEW_RECIPE_LEARNED','BAG_UPDATE_DELAYED','GET_ITEM_INFO_RECEIVED',
