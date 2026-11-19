@@ -1,0 +1,6 @@
+<Bindings>
+    <Binding name="ENCHANTPILOT_ACTION" header="ENCHANTPILOT">EnchantPilot_Action()</Binding>
+    <Binding name="ENCHANTPILOT_TOGGLE">EnchantPilot_Toggle()</Binding>
+    <Binding name="ENCHANTPILOT_PAUSE">EnchantPilot_Pause()</Binding>
+    <Binding name="CLICK EnchantPilotDisenchantButton:LeftButton" />
+</Bindings>

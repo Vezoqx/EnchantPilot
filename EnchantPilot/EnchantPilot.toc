@@ -1,0 +1,21 @@
+## Interface: 16001
+## Title: EnchantPilot
+## Notes: Guided repeat enchants, exact-item protection and profession tools. Beta for WoW Forever.
+## Notes-ruRU: Удобная прокачка наложения чар: серия, реагенты, защита предмета. Бета для WoW Forever.
+## Author: Vezoqx
+## Version: 0.2.49-beta
+## SavedVariablesPerCharacter: EnchantPilotDB
+Locale.lua
+Engine.lua
+EnchantTargets.lua
+Adapter.lua
+FormulaRequirements.lua
+Catalog.lua
+Inventory.lua
+Disenchant.lua
+PriceModel.lua
+Auction.lua
+ReagentIcons.lua
+Leveling.lua
+UI.lua
+Core.lua
